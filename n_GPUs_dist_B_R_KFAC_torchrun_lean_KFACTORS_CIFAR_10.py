@@ -211,7 +211,7 @@ def main(world_size, args):
                 print('\ntype(y) = {}, y = {}, y.get_device() = {}\n'.format(type(y),y, y.get_device()))
                 loss = loss_fn(pred, y)
             
-            print('the loss is {}'.format(loss))
+            #print('RANK {}: the loss is {}'.format(rank, loss))
             loss.backward()
             if jdx % 150 == 0 and epoch == n_epochs - 1:
                 tend = time.time()

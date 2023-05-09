@@ -395,8 +395,15 @@ class B_R_KFACOptimizer(optim.Optimizer):
         """
         # p_grad_mat is of output_dim * input_dim
         ######
-        v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, damping_type = self.damping_type) # the damping here is adaptive!
-        v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping, damping_type = self.damping_type)  # the damping here is adaptive!
+        if isinstance(m, nn.Linear) and self.steps % (self.TInv * self.brand_period) == 0 and (m not in self.modules_for_this_rank[self.rank]):
+        # if we are on the R-update step, then the Q_a, d_a, etc contain zeros. Slice the tensors to avoid zero-multiplication 
+        # this only happens on the "lazy" GPUs at the R_update step
+            a_rs_rk_a = min(self.rsvd_rank, self.d_a[m].shape[0]); a_rs_rk_g = min(self.rsvd_rank, self.d_g[m].shape[0])
+            v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m][:,:a_rs_rk_g], D = self.d_g[m][:a_rs_rk_g], M = p_grad_mat, lambdda = damping, damping_type = self.damping_type) # the damping here is adaptive!
+            v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m][:,:a_rs_rk_a], D = self.d_a[m][:a_rs_rk_a], M = v1, lambdda = damping, damping_type = self.damping_type)  # the damping here is adaptive!
+        else:
+            v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, damping_type = self.damping_type) # the damping here is adaptive!
+            v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping, damping_type = self.damping_type)  # the damping here is adaptive!
         
         '''v1 = self.Q_g[m].t() @ p_grad_mat @ self.Q_a[m]
         v2 = v1 / (self.d_g[m].unsqueeze(1) * self.d_a[m].unsqueeze(0) + damping)
@@ -511,14 +518,14 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 # if the inversion was done locally this turn, allreduce to disseminate inverse representation
                 #if it's time to recompute inverse for Conv layers or for liear (BRAND) layers
                 if self.dist_comm_for_layers_debugger:
-                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_a={}, Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.Q_g[m]))
+                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_g={}, Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.Q_a[m]))
                 #print('RANK {}. Doing line: dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 handle = dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_a[m] = 0 * self.d_a[m] + 1
 
                 #print('RANK {}. Doing line : dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
-                handle = dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = True)
+                handle = dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.Q_a[m] = 0 * self.Q_a[m]; Q_debug_size = min(self.Q_a[m].shape[0],self.Q_a[m].shape[1])
                 #self.Q_a[m][torch.arange(Q_debug_size),torch.arange(Q_debug_size)] = 1 # make Q_g identity to avoid comunication
@@ -534,11 +541,11 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 #self.Q_g[m] = 0 * self.Q_g[m]; Q_debug_size = min(self.Q_g[m].shape[0],self.Q_g[m].shape[1])
                 #self.Q_g[m][torch.arange(Q_debug_size),torch.arange(Q_debug_size)] = 1 # make Q_g identity to avoid comunication
                 if self.dist_comm_for_layers_debugger:
-                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_a={}, Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.Q_g[m]))
+                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_g={}, Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.Q_a[m]))
             elif isinstance(m, nn.Linear) and self.steps % (self.TInv * self.brand_period) == 0:
                 #if self.steps % (self.TInv * self.brand_period) == 0:
                 if self.dist_comm_for_layers_debugger:
-                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_a={}, Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.Q_g[m]))
+                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_g={}, Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.Q_a[m]))
                 #print('RANK {}. Doing line: dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 if m not in self.modules_for_this_rank[self.rank]: # for the GPUs not computing this particular R-update (in a B-R algo) for this layer, we always keep 
                     #the largest possible idmension in our d_a, Q_a etc variables, so we need to slice, communicate on slice, and rematch 
@@ -592,7 +599,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 else:
                     self.Q_g[m] = Q_g_to_communicate
                 if self.dist_comm_for_layers_debugger:
-                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_a={}, Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.Q_g[m]))
+                    print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_g={}, Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.Q_a[m]))
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. SHAPES OF d_a={}, Q_a = {}, d_g ={}, Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m].shape, self.Q_a[m].shape, self.d_g[m].shape, self.Q_g[m].shape))
             p_grad_mat = self._get_matrix_form_grad(m, classname)
             v = self._get_natural_grad(m, p_grad_mat, damping)
