@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --time=00:10:00
-#SBATCH --job-name=t_2GPU_K_trial
+#SBATCH --time=00:07:00
+#SBATCH --job-name=2G_BRK_C
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=4
@@ -20,6 +20,5 @@ nvidia-smi
 source activate /data/math-opt-ml/chri5570/myenv
 #optDLvenv
 
-#mpiexec python ./attempt_2_GPUs_naive_KFAC.py
-torchrun --standalone --nnodes 1 --nproc_per_node=2 ./n_GPUs_dist_KFAC_torchrun_lean_KFACTORS.py --world_size 2
-
+#mpiexec python ./attempt_4_GPUs_naive_KFAC.py
+OMP_NUM_THREADS=8 NCCL_BLOCKING_WAIT=1 torchrun --standalone --nnodes 1 --nproc_per_node=2 ./n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epochs 10 --brand_period 5 --brand_update_multiplier_to_TCov 1
