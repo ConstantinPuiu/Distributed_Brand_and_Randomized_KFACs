@@ -16,8 +16,8 @@ from datetime import datetime
 from torch.utils.data.dataloader import default_collate
 
 import sys
-sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') # add your own path to *this github repo here!
-#from true_kfac_FC_project_adaptive_damping import KFACOptimizer #distributed_kfac_simplest_form
+sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
+#sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_dataloader
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_R_kfac_lean_Kfactors_batchsize import R_KFACOptimizer

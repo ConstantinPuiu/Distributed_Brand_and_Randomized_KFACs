@@ -6,7 +6,8 @@ import torch.optim as optim
 import torch.distributed as dist
 
 import sys
-sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') # add your own path to *this github repo here!
+sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
+#sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
 
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import (ComputeCovA, ComputeCovG)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
