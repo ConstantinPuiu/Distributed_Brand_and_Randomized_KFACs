@@ -1,0 +1,62 @@
+Tue May  9 16:38:22 2023       
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 510.54       Driver Version: 510.54       CUDA Version: 11.6     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|                               |                      |               MIG M. |
+|===============================+======================+======================|
+|   0  Tesla V100-SXM2...  On   | 00000000:07:00.0 Off |                    0 |
+| N/A   37C    P0    42W / 163W |      0MiB / 32768MiB |      0%      Default |
+|                               |                      |                  N/A |
++-------------------------------+----------------------+----------------------+
+|   1  Tesla V100-SXM2...  On   | 00000000:86:00.0 Off |                    0 |
+| N/A   38C    P0    41W / 163W |      0MiB / 32768MiB |      0%      Default |
+|                               |                      |                  N/A |
++-------------------------------+----------------------+----------------------+
+                                                                               
++-----------------------------------------------------------------------------+
+| Processes:                                                                  |
+|  GPU   GI   CI        PID   Type   Process name                  GPU Memory |
+|        ID   ID                                                   Usage      |
+|=============================================================================|
+|  No running processes found                                                 |
++-----------------------------------------------------------------------------+
+/data/math-opt-ml/chri5570/myenv/bin/python: can't open file '/home/chri5570/Distributed_Brand_and_Randomized_KFACs/example_shell_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py': [Errno 2] No such file or directory
+/data/math-opt-ml/chri5570/myenv/bin/python: can't open file '/home/chri5570/Distributed_Brand_and_Randomized_KFACs/example_shell_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py': [Errno 2] No such file or directory
+ERROR:torch.distributed.elastic.multiprocessing.api:failed (exitcode: 2) local_rank: 0 (pid: 2893982) of binary: /data/math-opt-ml/chri5570/myenv/bin/python
+Traceback (most recent call last):
+  File "/data/math-opt-ml/chri5570/myenv/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/data/math-opt-ml/chri5570/myenv/lib/python3.8/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/data/math-opt-ml/chri5570/myenv/lib/python3.8/site-packages/torch/distributed/run.py", line 762, in main
+    run(args)
+  File "/data/math-opt-ml/chri5570/myenv/lib/python3.8/site-packages/torch/distributed/run.py", line 753, in run
+    elastic_launch(
+  File "/data/math-opt-ml/chri5570/myenv/lib/python3.8/site-packages/torch/distributed/launcher/api.py", line 132, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/data/math-opt-ml/chri5570/myenv/lib/python3.8/site-packages/torch/distributed/launcher/api.py", line 246, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/home/chri5570/Distributed_Brand_and_Randomized_KFACs/example_shell_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2023-05-09_16:38:50
+  host      : htc-g045.arcus-htc.arc.local
+  rank      : 1 (local_rank: 1)
+  exitcode  : 2 (pid: 2893983)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2023-05-09_16:38:50
+  host      : htc-g045.arcus-htc.arc.local
+  rank      : 0 (local_rank: 0)
+  exitcode  : 2 (pid: 2893982)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
