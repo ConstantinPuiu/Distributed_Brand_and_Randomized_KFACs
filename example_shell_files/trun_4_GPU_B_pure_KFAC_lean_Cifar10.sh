@@ -21,4 +21,5 @@ source activate /data/math-opt-ml/chri5570/myenv
 #optDLvenv
 
 #mpiexec python ./attempt_4_GPUs_naive_KFAC.py
-OMP_NUM_THREADS=8 NCCL_LL_THRESHOLD=0 torchrun --standalone --nnodes 1 --nproc_per_node=4 ./n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 4 --n_epochs 10 --brand_period 500000 --brand_update_multiplier_to_TCov 5
+#NCCL_LL_THRESHOLD=0
+OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/example_shell_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 4 --n_epochs 10 --brand_period 500000 --brand_update_multiplier_to_TCov 5
