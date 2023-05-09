@@ -21,5 +21,6 @@ source activate /data/math-opt-ml/chri5570/myenv
 #optDLvenv
 
 #mpiexec python ./attempt_2_GPUs_naive_KFAC.py
-torchrun --standalone --nnodes 1 --nproc_per_node=2 ./n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epoch 10
+#NCCL_BLOCKING_WAIT=1
+OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 ./n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epoch 10
 
