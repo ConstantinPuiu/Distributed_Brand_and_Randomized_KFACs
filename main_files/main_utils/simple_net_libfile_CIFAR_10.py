@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from vgg_model import vgg16_bn_less_maxpool
+from Distributed_Brand_and_Randomized_KFACs.main_utils.vgg_model import vgg16_bn_less_maxpool
 
   
 def get_network(network, dropout = False, **kwargs):

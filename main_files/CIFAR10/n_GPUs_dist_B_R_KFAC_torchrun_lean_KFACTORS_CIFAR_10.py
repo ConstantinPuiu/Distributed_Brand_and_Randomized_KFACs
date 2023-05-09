@@ -2,7 +2,6 @@ import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 import torchvision.datasets as datasets
 from torch.nn.parallel import DistributedDataParallel as DDP
-from simple_net_libfile_CIFAR_10 import get_network
 #from simple_net_libfile_2 import Net
 import torch.optim as optim
 import torch.nn.functional as F
@@ -16,13 +15,14 @@ import argparse
 from datetime import datetime
 import datetime as dateT
 from torch.utils.data.dataloader import default_collate
-from data_utils_dist_computing import get_dataloader
 
 print('torch.__version__'.format(torch.__version__))
 
 #from true_kfac_FC_project_adaptive_damping import KFACOptimizer #distributed_kfac_simplest_form
-from distributed_B_R_kfac_lean_Kfactors_batchsize import B_R_KFACOptimizer
-from lrfct import l_rate_function
+from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_dataloader
+from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_B_R_kfac_lean_Kfactors_batchsize import B_R_KFACOptimizer
+from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
+from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile_CIFAR_10 import get_network
 
 
 #from torch.utils.data.distributed import DistributedSampler

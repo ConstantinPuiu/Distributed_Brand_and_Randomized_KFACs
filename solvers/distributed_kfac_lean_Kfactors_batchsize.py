@@ -4,9 +4,9 @@ import torch
 import torch.optim as optim
 import torch.distributed as dist
 
-from kfac_utils_for_vgg16_bn import (ComputeCovA, ComputeCovG)
-from kfac_utils_for_vgg16_bn import update_running_stat
-from kfac_utils_for_vgg16_bn import fct_split_list_of_modules
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import (ComputeCovA, ComputeCovG)
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 
 
 class KFACOptimizer(optim.Optimizer):

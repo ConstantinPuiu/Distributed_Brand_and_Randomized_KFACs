@@ -2,8 +2,7 @@ import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 import torchvision.datasets as datasets
 from torch.nn.parallel import DistributedDataParallel as DDP
-from simple_net_libfile import Net
-#from simple_net_libfile_2 import Net
+
 import torch.optim as optim
 import torch.nn.functional as F
 import torch.multiprocessing as mp
@@ -17,8 +16,10 @@ from datetime import datetime
 from torch.utils.data.dataloader import default_collate
 
 #from true_kfac_FC_project_adaptive_damping import KFACOptimizer #distributed_kfac_simplest_form
-from distributed_kfac_lean_Kfactors_batchsize import KFACOptimizer
-from lrfct import l_rate_function
+
+from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_kfac_lean_Kfactors_batchsize import KFACOptimizer
+from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
+from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile import Net
 
 
 #from torch.utils.data.distributed import DistributedSampler

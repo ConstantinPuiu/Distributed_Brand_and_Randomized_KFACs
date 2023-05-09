@@ -4,9 +4,9 @@ import torch
 import torch.optim as optim
 import torch.distributed as dist
 
-from kfac_utils_for_vgg16_bn import (ComputeCovA, ComputeCovG)
-from kfac_utils_for_vgg16_bn import update_running_stat
-from kfac_utils_for_vgg16_bn import fct_split_list_of_modules
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import (ComputeCovA, ComputeCovG)
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 
 def X_reg_inverse_M_adaptive_damping(U,D,M,lambdda, damping_type): # damping_type is just an artefact now
     # X = UDU^T; want to compute (X + lambda I)^{-1}M
