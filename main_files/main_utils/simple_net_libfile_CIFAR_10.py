@@ -1,6 +1,10 @@
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+
+import sys
+sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') # add your own path to *this github repo here!
+
 from Distributed_Brand_and_Randomized_KFACs.main_utils.vgg_model import vgg16_bn_less_maxpool
 
   
