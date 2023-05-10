@@ -12,28 +12,28 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 
-def X_reg_inverse_M_adaptive_damping(U,D,M,lambdda, damping_type): # damping_type is just an artefact now
+def X_reg_inverse_M_adaptive_damping(U,D,M,lambdda, n_kfactor_update, rho, damping_type): # damping_type is just an artefact now
     # X = UDU^T; want to compute (X + lambda I)^{-1}M
     # X is low rank! X is square: X is either AA^T or GG^T
     # This is actually for G as G sits before
     # the damping here is adaptive! - it adjusts based on the amxium eigenvalue !
     lbd_continue = torch.min(D) # torch.min(D) # 0 #<---possible choices
     #if damping_type == 'adaptive':
-    lambdda = lambdda * torch.max(D)
+    lambdda = lambdda * torch.max(D) + rho**n_kfactor_update #+ rho**n_kfactor_update is the identity initialization of kfactors moved to reg
     lambdda = lambdda + lbd_continue
     #### effective computations :
     U_T_M = torch.matmul(U.T, M)
     U_times_reg_D_times_U_T_M = torch.matmul( U * ( 1/(D + lambdda - lbd_continue) - 1/lambdda), U_T_M)
     return U_times_reg_D_times_U_T_M + (1/lambdda) * M
     
-def M_X_reg_inverse_adaptive_damping(U,D,M,lambdda, damping_type): # damping_type is just an artefact now
+def M_X_reg_inverse_adaptive_damping(U,D,M,lambdda, n_kfactor_update, rho, damping_type): # damping_type is just an artefact now
     # X = UDU^T; want to compute (X + lambda I)^{-1}M
     # X is low rank! X is square: X is either AA^T or GG^T
     # This is actually for A as A sits after M
     # the damping here is adaptive! - it adjusts based on the amxium eigenvalue !
     lbd_continue = torch.min(D) # torch.min(D) # 0 #<---possible choices
     #if damping_type == 'adaptive':
-    lambdda = lambdda * torch.max(D)
+    lambdda = lambdda * torch.max(D) + rho**n_kfactor_update #+ rho**n_kfactor_update is the identity initialization of kfactors moved to reg
     lambdda = lambdda + lbd_continue
     #### effective computations :
     M_times_U_times_reg_D_times_U_T = M @ ( U * ( 1/(D + lambdda - lbd_continue) - 1/lambdda) ) @ U.T
@@ -142,10 +142,13 @@ class R_KFACOptimizer(optim.Optimizer):
                 if self.K_fac_incoming_info_debugger_mode or self.dist_debugger_testing_leanness_thing:
                     print('RANK {} WORLDSIZE {}. At module {} \n ... the A size is {}\n'.format(self.rank, self.world_size, module, input[0].data.shape))
                 ############ END DEBUG ONLY #########
-                # Initialize buffers
-                if self.steps == 0:
-                    self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(1))
+                
+                if self.steps == 0: # Initialize buffers
+                    self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                    # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
+                else:
+                    update_running_stat(aa, self.m_aa[module], self.stat_decay)
                 
                 ############ DEBUG ONLY #########
                 if self.Dist_communication_debugger:
@@ -157,8 +160,6 @@ class R_KFACOptimizer(optim.Optimizer):
                     print('RANK {} WORLDSIZE {}. At module {}. AA^T Value after reducing is = {}\n'.format(
                         self.rank, self.world_size, module,aa))
                 ############ END DEBUG ONLY #########
-                
-                update_running_stat(aa, self.m_aa[module], self.stat_decay)
                 
                 ############ DEBUG ONLY #############
                 if self.dist_communication_2nd_version_debugger and (self.steps % self.TCov == 0):
@@ -187,10 +188,14 @@ class R_KFACOptimizer(optim.Optimizer):
                     print('RANK {} WORLDSIZE {}. At module {} \n ... the G size is {}\n'.format(self.rank, self.world_size, module, grad_output[0].data.shape))
                 gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
                 # Initialize buffers
-                if self.steps == 0:
-                    self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
-                # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                update_running_stat(gg, self.m_gg[module], self.stat_decay)
+                if self.steps == 0: # Initialize buffers
+                    # self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
+                    self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                    # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
+                    # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
+                else:
+                    update_running_stat(gg, self.m_gg[module], self.stat_decay)
+                
             else: # this part is done only at the init (once per module) to get us the correct dimensions we need to use later
                 if self.steps == 0:
                     gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
@@ -288,8 +293,13 @@ class R_KFACOptimizer(optim.Optimizer):
         """
         # p_grad_mat is of output_dim * input_dim
         ######
-        v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, damping_type = self.damping_type) # the damping here is adaptive!
-        v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping, damping_type = self.damping_type)  # the damping here is adaptive!
+        nkfu_g = nkfu_a = math.floor(self.TInv * math.floor(self.steps / self.TInv) / self.TCov)
+        # this is not just math.floor(self.steps / self.TCov) because the inverse gets updated on every TInv iterations,
+        # and when it does, th inverse (and thus the inverse application "sees" all the more updates done at frequency TCov - think about it!
+        v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, 
+                                               n_kfactor_update = nkfu_g, rho = self.stat_decay, damping_type = self.damping_type)
+        v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping, 
+                                              n_kfactor_update = nkfu_a, rho = self.stat_decay, damping_type = self.damping_type)  # the damping here is adaptive!
         
         '''v1 = self.Q_g[m].t() @ p_grad_mat @ self.Q_a[m]
         v2 = v1 / (self.d_g[m].unsqueeze(1) * self.d_a[m].unsqueeze(0) + damping)
@@ -406,4 +416,5 @@ class R_KFACOptimizer(optim.Optimizer):
 
         self._step(closure)
         self.steps += 1
+
 
