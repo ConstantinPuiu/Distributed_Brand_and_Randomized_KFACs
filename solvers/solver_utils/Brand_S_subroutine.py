@@ -50,5 +50,5 @@ def Brand_S_update(U, D, A, r_target, device):
     S, hat_U = torch.linalg.eigh(M, UPLO='U')
     hat_U = torch.matmul(U_tilde, hat_U)
     
-    return S, hat_U
+    return S, hat_U.contiguous()
 
