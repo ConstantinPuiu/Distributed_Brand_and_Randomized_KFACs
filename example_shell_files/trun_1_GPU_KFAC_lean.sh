@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --time=00:10:00
-#SBATCH --job-name=t_1GPU_K_trial
+#SBATCH --job-name=t_1G_K_M
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
@@ -21,5 +21,5 @@ source activate /data/math-opt-ml/chri5570/myenv
 #optDLvenv
 
 #mpiexec python ./attempt_4_GPUs_naive_KFAC.py
-torchrun --standalone --nnodes 1 --nproc_per_node=1 ./n_GPUs_dist_KFAC_torchrun_lean_KFACTORS.py --world_size 1
+torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/MNIST/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS.py --world_size 1
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --time=00:30:00
-#SBATCH --job-name=2G_K_C
+#SBATCH --job-name=2G_K
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2 --constraint='gpu_sku:V100'
 #SBATCH --cpus-per-task=4
@@ -22,5 +22,5 @@ source activate /data/math-opt-ml/chri5570/myenv
 
 #mpiexec python ./attempt_2_GPUs_naive_KFAC.py
 #NCCL_BLOCKING_WAIT=1
-OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 ./n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epoch 10
+OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epoch 10
 
