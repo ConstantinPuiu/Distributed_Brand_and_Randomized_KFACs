@@ -45,7 +45,7 @@ def M_X_reg_inverse_adaptive_damping(U,D,M,lambdda, damping_type): # damping_typ
 def RSVD_lowrank(M, oversampled_rank, target_rank, niter, start_matrix = None):
     U, D, V = torch.svd_lowrank(M, q = oversampled_rank, niter = niter, M = None) # RSVD returns SVs in descending order !
     # we're flipping because we want the eigenvalues in ASCENDING order ! s.t. we can work with the brand subroutine which uses eigh with ascending order evals
-    return torch.flip(D[:target_rank] + 0.0, dims=(0,)), torch.flip(V[:, :target_rank] + 0.0, dims=(1,))  # OMEGA IS u - overwritten for efficiency
+    return torch.flip(D[:target_rank] + 0.0, dims=(0,)), torch.flip(V[:, :target_rank] + 0.0, dims=(1,)).contiguous()  # OMEGA IS u - overwritten for efficiency
 
 class B_R_KFACOptimizer(optim.Optimizer):
     def __init__(self,
@@ -212,8 +212,6 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         oversampled_rank = min(self.m_aa[module].shape[0], self.total_rsvd_rank)
                         actual_rank = min(self.m_aa[module].shape[0], self.rsvd_rank)
                         self.d_a[module], self.Q_a[module] = RSVD_lowrank(M = self.m_aa[module], oversampled_rank = oversampled_rank, target_rank = actual_rank, niter = self.rsvd_niter, start_matrix = None)
-                    # Ensure tensor Q_a is contiguous s.t. the allreduce can work! the tensor becoming noncontiguous can be due to transposition and it occurs in practice
-                    self.Q_a[module] = self.Q_a[module].contiguous()
                 ####### END : Brand - Update the RSVD of \bar{AA} ############## 
                 
                 ############ DEBUG ONLY #############
@@ -292,8 +290,6 @@ class B_R_KFACOptimizer(optim.Optimizer):
                                                                           target_rank = actual_rank, niter = self.rsvd_niter, 
                                                                           start_matrix = None)
             
-                    # Ensure tensor Q_a is contiguous s.t. the allreduce can work! the tensor becoming noncontiguous can be due to transposition and it occurs in practice
-                    self.Q_g[module] = self.Q_g[module].contiguous()
             else: # this part is done only at the init (once per module) to get us the correct dimensions we need to use later
                 if self.steps == 0:
                     gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
@@ -363,8 +359,6 @@ class B_R_KFACOptimizer(optim.Optimizer):
             self.d_g[m].mul_((self.d_g[m] > eps).float())
             
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
-            self.Q_a[m] = self.Q_a[m].contiguous()
-            self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}, Q_q.shape = {}, d_g.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape, self.Q_g[m].shape,self.d_g[m].shape))
@@ -612,6 +606,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
 
         self._step(closure)
         self.steps += 1
+
 
 
 
