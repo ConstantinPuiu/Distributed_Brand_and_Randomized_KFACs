@@ -47,7 +47,7 @@ def RSVD_lowrank(M, oversampled_rank, target_rank, niter, start_matrix = None):
     # we're flipping because we want the eigenvalues in ASCENDING order ! s.t. we can work with the brand subroutine which uses eigh with ascending order evals
     return torch.flip(D[:target_rank] + 0.0, dims=(0,)), torch.flip(V[:, :target_rank] + 0.0, dims=(1,))  # OMEGA IS u - overwritten for efficiency
 
-class B_R_KFACOptimizer(optim.Optimizer):
+class B_KFACOptimizer(optim.Optimizer):
     def __init__(self,
                  model,
                  rank, world_size,
@@ -77,7 +77,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         momentum=momentum, damping=damping,
                         weight_decay=weight_decay)
         # TODO (CW): KFAC optimizer now only support model as input
-        super(B_R_KFACOptimizer, self).__init__(model.parameters(), defaults)
+        super(B_KFACOptimizer, self).__init__(model.parameters(), defaults)
         self.CovAHandler = ComputeCovA()
         self.CovGHandler = ComputeCovG()
         self.batch_averaged = batch_averaged
