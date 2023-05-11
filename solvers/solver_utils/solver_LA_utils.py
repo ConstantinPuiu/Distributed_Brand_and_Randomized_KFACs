@@ -1,3 +1,4 @@
+import torch
 def X_reg_inverse_M_adaptive_damping(U,D,M,lambdda, n_kfactor_update, rho, damping_type): # damping_type is just an artefact now
     # X = UDU^T; want to compute (X + lambda I)^{-1}M
     # X is low rank! X is square: X is either AA^T or GG^T
