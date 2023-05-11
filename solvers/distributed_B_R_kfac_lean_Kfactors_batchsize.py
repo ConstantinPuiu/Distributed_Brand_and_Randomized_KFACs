@@ -144,6 +144,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 
                 # Initialize buffers
                 if self.steps == 0:
+                    self.size_of_nonlazy_Kfactors_a[module] = aa.shape[0]
                     if isinstance(module, nn.Linear) and (self.brand_r_target + input[0].data.shape[0] < aa.shape[0]): 
                         self.Brand_track_update_module_list_a.append(module)
                     self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(0))
@@ -168,14 +169,12 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 and only invert when the time comes : i.e. make it work for for TCov < TInv!'''
                 
                 ############ Brand - Update the RSVD of \bar{AA} ##############
-                # if layer is linear and it's not time to do RSVD and it's time to do brand update
-                if isinstance(module, nn.Linear) and self.steps % (self.TInv * self.brand_period) != 0 and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
-                    n_dim = self.m_aa[module].shape[0] # input[0].data.shape[1]; 
-                    c_dim = input[0].data.shape[0]; r_dim = self.brand_r_target #self.Q_a[module].shape[1] <---- WRONG
-                    if r_dim + c_dim < n_dim: # only if the new B_updated AA^T matrix is lowrank
-                        # If the layer is linear! and it's time to do the update
-                        # g: batch_size * out_dim
-                        batch_size = c_dim
+                # apparently unneccesarly if-branching on whether the linear layer is SMALL or LARGE: this is to allow more
+                # flexibility on changing how to deal with the SMALL linear layer later, if needed
+                if isinstance(module, nn.Linear) and self.steps % (self.TInv * self.brand_period) != 0:
+                    # If the layer is linear! and it's NOT time to do the R-update: which is done at inversion update stage
+                    if (module in self.Brand_track_update_module_list_a) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                        batch_size = input[0].data.shape[0] #  c_dim = input[0].data.shape[0]
                         
                         A = input[0].data / (batch_size + 0)**(0.5)
                         if module.bias is not None:
@@ -185,10 +184,15 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
                                                                             A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
                                                                             device = torch.device('cuda:{}'.format(self.rank)) )
-                    else: # if doing the brand update would give a Raw representation of higher rank than Max possible one, just do the rsvd
-                        oversampled_rank = min(self.m_aa[module].shape[0], self.total_rsvd_rank)
-                        actual_rank = min(self.m_aa[module].shape[0], self.rsvd_rank)
+                    elif (module not in self.Brand_track_update_module_list_a) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: #self.steps % self.TInv == 0:
+                        # we treat the linear but too small modules the same as conv modules
+                        oversampled_rank = min(self.size_of_nonlazy_Kfactors_a[module], self.total_rsvd_rank)
+                        actual_rank = min(self.size_of_nonlazy_Kfactors_a[module], self.rsvd_rank)
                         self.d_a[module], self.Q_a[module] = RSVD_lowrank(M = self.m_aa[module], oversampled_rank = oversampled_rank, target_rank = actual_rank, niter = self.rsvd_niter, start_matrix = None)
+                        # Ensure tensor Q_a is contiguous s.t. the allreduce can work! the tensor becoming noncontiguous can be due to transposition and it occurs in practice
+                        #self.Q_a[module] = self.Q_a[module].contiguous()
+                else: # Conv (not linear) modules are dealt with in the _update_inv method only
+                   pass
                 ####### END : Brand - Update the RSVD of \bar{AA} ############## 
                 
                 ############ DEBUG ONLY #############
@@ -235,6 +239,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 
                 # Initialize buffers
                 if self.steps == 0:
+                    self.size_of_nonlazy_Kfactors_g[module] = gg.shape[0]
                     if isinstance(module, nn.Linear) and (self.brand_r_target + grad_output[0].data.shape[0] < gg.shape[0]) : 
                         self.Brand_track_update_module_list_g.append(module) 
                     self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(0))
@@ -247,15 +252,14 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 and only invert when the time comes : i.e. make it work for for TCov < TInv!'''
                 
                 ############ Brand - Update the RSVD of \bar{GG} ##############
-                # if layer is linear and it's not time to do RSVD and it's time to do brand update
-                if isinstance(module, nn.Linear) and self.steps % (self.TInv * self.brand_period) != 0 and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
-                    # If the layer is linear! and it's time to do the update
+                # apparently unneccesarly if-branching on whether the linear layer is SMALL or LARGE: this is to allow more
+                # flexibility on changing how to deal with the SMALL linear layer later, if needed
+                if isinstance(module, nn.Linear) and self.steps % (self.TInv * self.brand_period) != 0:
+                    # If the layer is linear! and it's NOT time to do the R-update: which is done at inversion update stage
                     # g: batch_size * out_dim
                     #print('Updating GG^T')
-                    n_dim = self.m_gg[module].shape[0] #grad_output[0].data.shape[1];
-                    c_dim = grad_output[0].data.shape[0]; r_dim = self.brand_r_target #self.Q_g[module].shape[1] <----- WRONG
-                    if r_dim + c_dim < n_dim: # only if the new B_updated AA^T matrix is lowrank
-                        batch_size = c_dim
+                    if (module in self.Brand_track_update_module_list_g) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                        batch_size =  grad_output[0].data.shape[0] # c_dim =batch_size
                         if self.batch_averaged:
                             G = grad_output[0].data.T * (batch_size + 0.0)**0.5
                         else:
@@ -264,13 +268,19 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
                                                                             A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
                                                                             device = torch.device('cuda:{}'.format(self.rank)) )
-                    else:
-                        oversampled_rank = min(self.m_gg[module].shape[0], self.total_rsvd_rank)
-                        actual_rank = min(self.m_gg[module].shape[0], self.rsvd_rank)
+                    elif (module not in self.Brand_track_update_module_list_g) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                        # we treat the linear but too small modules the same as conv modules
+                        oversampled_rank = min(self.size_of_nonlazy_Kfactors_g[module], self.total_rsvd_rank)
+                        actual_rank = min(self.size_of_nonlazy_Kfactors_g[module], self.rsvd_rank)
                         self.d_g[module], self.Q_g[module] = RSVD_lowrank(M = self.m_gg[module], oversampled_rank = oversampled_rank, 
                                                                           target_rank = actual_rank, niter = self.rsvd_niter, 
                                                                           start_matrix = None)
-            
+                        # Ensure tensor Q_a is contiguous s.t. the allreduce can work! the tensor becoming noncontiguous can be due to transposition and it occurs in practice
+                        #self.Q_g[module] = self.Q_g[module].contiguous()
+                else: # Conv (not linear) modules are dealt with in the _update_inv method only
+                    pass
+                 ######## END : Brand - Update the RSVD of \bar{GG} ###########
+                
             else: # this part is done only at the init (once per module) to get us the correct dimensions we need to use later
                 if self.steps == 0:
                     gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
@@ -602,6 +612,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
 
         self._step(closure)
         self.steps += 1
+
 
 
 
