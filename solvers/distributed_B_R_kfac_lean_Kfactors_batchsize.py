@@ -147,7 +147,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                     self.size_of_nonlazy_Kfactors_a[module] = aa.shape[0]
                     if isinstance(module, nn.Linear) and (self.brand_r_target + input[0].data.shape[0] < aa.shape[0]): 
                         self.Brand_track_update_module_list_a.append(module)
-                    self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(0))
+                    #self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(0))
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 
                 ############ DEBUG ONLY #########
@@ -162,8 +162,13 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 ############ END DEBUG ONLY #########
                 
                 ############ also update the real AA for alter correction ########
-                ## TODO:make this NOT happen when we're doing PURE B-KFAC
-                update_running_stat(aa, self.m_aa[module], self.stat_decay)
+                ## TODO:make this NOT happen when we're doing PURE B-KFAC: done in proper B pure file
+                if self.steps == 0: # Initialize buffers
+                    self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                    # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
+                    # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
+                else:
+                    update_running_stat(aa, self.m_aa[module], self.stat_decay)
                 
                 ''' TO DO: make it possible to accumulate in incoming A (from AA^T)
                 and only invert when the time comes : i.e. make it work for for TCov < TInv!'''
@@ -242,11 +247,17 @@ class B_R_KFACOptimizer(optim.Optimizer):
                     self.size_of_nonlazy_Kfactors_g[module] = gg.shape[0]
                     if isinstance(module, nn.Linear) and (self.brand_r_target + grad_output[0].data.shape[0] < gg.shape[0]) : 
                         self.Brand_track_update_module_list_g.append(module) 
-                    self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(0))
+                    #self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(0))
                 # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 
                 ############ also update the real AA for alter correction ########
-                update_running_stat(gg, self.m_gg[module], self.stat_decay)
+                if self.steps == 0: # Initialize buffers
+                    # self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
+                    self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                    # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
+                    # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
+                else:
+                    update_running_stat(gg, self.m_gg[module], self.stat_decay)
                 
                 ''' TO DO: make it possible to accumulate in incoming A (from AA^T)
                 and only invert when the time comes : i.e. make it work for for TCov < TInv!'''
@@ -612,6 +623,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
 
         self._step(closure)
         self.steps += 1
+
 
 
 
