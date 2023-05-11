@@ -15,28 +15,28 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subroutine import Brand_S_update
 
-def X_reg_inverse_M_adaptive_damping(U,D,M,lambdda, damping_type): # damping_type is just an artefact now
+def X_reg_inverse_M_adaptive_damping(U,D,M,lambdda, n_kfactor_update, rho, damping_type): # damping_type is just an artefact now
     # X = UDU^T; want to compute (X + lambda I)^{-1}M
     # X is low rank! X is square: X is either AA^T or GG^T
     # This is actually for G as G sits before
     # the damping here is adaptive! - it adjusts based on the amxium eigenvalue !
     lbd_continue = torch.min(D) # torch.min(D) # 0 #<---possible choices
     #if damping_type == 'adaptive':
-    lambdda = lambdda * torch.max(D)
+    lambdda = lambdda * torch.max(D) + rho**n_kfactor_update #+ rho**n_kfactor_update is the identity initialization of kfactors moved to reg
     lambdda = lambdda + lbd_continue
     #### effective computations :
     U_T_M = torch.matmul(U.T, M)
     U_times_reg_D_times_U_T_M = torch.matmul( U * ( 1/(D + lambdda - lbd_continue) - 1/lambdda), U_T_M)
     return U_times_reg_D_times_U_T_M + (1/lambdda) * M
     
-def M_X_reg_inverse_adaptive_damping(U,D,M,lambdda, damping_type): # damping_type is just an artefact now
+def M_X_reg_inverse_adaptive_damping(U,D,M,lambdda, n_kfactor_update, rho, damping_type): # damping_type is just an artefact now
     # X = UDU^T; want to compute (X + lambda I)^{-1}M
     # X is low rank! X is square: X is either AA^T or GG^T
     # This is actually for A as A sits after M
     # the damping here is adaptive! - it adjusts based on the amxium eigenvalue !
     lbd_continue = torch.min(D) # torch.min(D) # 0 #<---possible choices
     #if damping_type == 'adaptive':
-    lambdda = lambdda * torch.max(D)
+    lambdda = lambdda * torch.max(D) + rho**n_kfactor_update #+ rho**n_kfactor_update is the identity initialization of kfactors moved to reg
     lambdda = lambdda + lbd_continue
     #### effective computations :
     M_times_U_times_reg_D_times_U_T = M @ ( U * ( 1/(D + lambdda - lbd_continue) - 1/lambdda) ) @ U.T
@@ -98,8 +98,6 @@ class B_R_KFACOptimizer(optim.Optimizer):
         self.m_aa, self.m_gg = {}, {}
         self.Q_a, self.Q_g = {}, {} 
         self.d_a, self.d_g = {}, {}
-        self.size_of_missing_m_aa = {}
-        self.size_of_missing_m_gg = {}
         self.stat_decay = stat_decay
 
         self.kl_clip = kl_clip
@@ -148,6 +146,14 @@ class B_R_KFACOptimizer(optim.Optimizer):
         self.batch_size = None
         #######################################################################
         
+        #### for tracking which modules are on Brand track and whicha ren't
+        self.size_of_missing_m_aa = {} # dictionary tracking the size of lazy AA^T kfactors 
+        self.size_of_missing_m_gg = {} # dictionary tracking the size of lazy GG^T kfactors 
+        self.size_of_nonlazy_Kfactors_a = {} # dictionary tracking the size of NON-lazy & non-brand-tracked AA^T kfactors 
+        self.size_of_nonlazy_Kfactors_g = {} # dictionary tracking the size of NON-lazy & non-brand-tracked AA^T kfactors 
+        self.Brand_track_update_module_list_a = [] # this list is THE SAME for each GPU, the global Brand-tracked list of Kfactor
+        self.Brand_track_update_module_list_g = [] # this list is THE SAME for each GPU, the global Brand-tracked list of Kfactor
+        
     def _save_input(self, module, input):
         ### save batchsize
         if self.batch_size == None and isinstance(module, nn.Linear):
@@ -169,7 +175,9 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 
                 # Initialize buffers
                 if self.steps == 0:
-                    self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(1))
+                    if isinstance(module, nn.Linear) and (self.brand_r_target + input[0].data.shape[0] < aa.shape[0]): 
+                        self.Brand_track_update_module_list_a.append(module)
+                    self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(0))
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 
                 ############ DEBUG ONLY #########
@@ -231,6 +239,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         extra_rank_target = batch_size = input[0].data.shape[0]
                         if aa.shape[0] > self.rsvd_rank + extra_rank_target:
                             actual_rank = self.rsvd_rank + extra_rank_target
+                            self.Brand_track_update_module_list_a.append(module)
                         else:
                             actual_rank = min(aa.shape[0], self.rsvd_rank)
                     else:
@@ -254,9 +263,12 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 if self.K_fac_incoming_info_debugger_mode or self.dist_debugger_testing_leanness_thing:
                     print('RANK {} WORLDSIZE {}. At module {} \n ... the G size is {}\n'.format(self.rank, self.world_size, module, grad_output[0].data.shape))
                 gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
+                
                 # Initialize buffers
                 if self.steps == 0:
-                    self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
+                    if isinstance(module, nn.Linear) and (self.brand_r_target + grad_output[0].data.shape[0] < gg.shape[0]) : 
+                        self.Brand_track_update_module_list_g.append(module) 
+                    self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(0))
                 # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 
                 ############ also update the real AA for alter correction ########
@@ -301,6 +313,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         extra_rank_target = self.batch_size = grad_output[0].data.shape[0]
                         if gg.shape[0] > self.rsvd_rank + extra_rank_target:
                             actual_rank = self.rsvd_rank + extra_rank_target
+                            self.Brand_track_update_module_list_g.append(module)
                         else:
                             actual_rank = min(gg.shape[0], self.rsvd_rank)
                     else:
@@ -392,16 +405,30 @@ class B_R_KFACOptimizer(optim.Optimizer):
         :return: a list of gradients w.r.t to the parameters in `m`
         """
         # p_grad_mat is of output_dim * input_dim
+        ###### get nkfu #################
+        if m in self.Brand_track_update_module_list_a:
+            nkfu_a = math.floor(self.steps / (self.TCov * self.brand_update_multiplier_to_TCov))
+        else:
+            nkfu_a = math.floor(self.TInv * math.floor(self.steps / self.TInv) / self.TCov)
+        if m in self.Brand_track_update_module_list_g:
+            nkfu_g = math.floor(self.steps / (self.TCov * self.brand_update_multiplier_to_TCov))
+        else:
+            nkfu_g = math.floor(self.TInv * math.floor(self.steps / self.TInv) / self.TCov)
+        ###### END: get nkfu ############
         ######
         if isinstance(m, nn.Linear) and self.steps % (self.TInv * self.brand_period) == 0 and (m not in self.modules_for_this_rank[self.rank]):
         # if we are on the R-update step, then the Q_a, d_a, etc contain zeros. Slice the tensors to avoid zero-multiplication 
         # this only happens on the "lazy" GPUs at the R_update step
             a_rs_rk_a = min(self.rsvd_rank, self.d_a[m].shape[0]); a_rs_rk_g = min(self.rsvd_rank, self.d_g[m].shape[0])
-            v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m][:,:a_rs_rk_g], D = self.d_g[m][:a_rs_rk_g], M = p_grad_mat, lambdda = damping, damping_type = self.damping_type) # the damping here is adaptive!
-            v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m][:,:a_rs_rk_a], D = self.d_a[m][:a_rs_rk_a], M = v1, lambdda = damping, damping_type = self.damping_type)  # the damping here is adaptive!
+            v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m][:,:a_rs_rk_g], D = self.d_g[m][:a_rs_rk_g], M = p_grad_mat, lambdda = damping,  
+                                               n_kfactor_update = nkfu_g, rho = self.stat_decay, damping_type = self.damping_type) # the damping here is adaptive!
+            v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m][:,:a_rs_rk_a], D = self.d_a[m][:a_rs_rk_a], M = v1, lambdda = damping, 
+                                              n_kfactor_update = nkfu_a, rho = self.stat_decay, damping_type = self.damping_type)  # the damping here is adaptive!
         else:
-            v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, damping_type = self.damping_type) # the damping here is adaptive!
-            v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping, damping_type = self.damping_type)  # the damping here is adaptive!
+            v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping,  
+                                               n_kfactor_update = nkfu_g, rho = self.stat_decay, damping_type = self.damping_type) # the damping here is adaptive!
+            v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping,
+                                              n_kfactor_update = nkfu_a, rho = self.stat_decay, damping_type = self.damping_type)  # the damping here is adaptive!
         
         '''v1 = self.Q_g[m].t() @ p_grad_mat @ self.Q_a[m]
         v2 = v1 / (self.d_g[m].unsqueeze(1) * self.d_a[m].unsqueeze(0) + damping)
