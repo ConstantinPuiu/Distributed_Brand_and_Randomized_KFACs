@@ -122,6 +122,9 @@ def main(world_size, args):
     n_epochs = args.n_epochs
     TCov_period = args.TCov_period
     TInv_period = args.TInv_period
+    
+    ##### wor allocation
+    work_alloc_propto_RSVD_cost = args.work_alloc_propto_RSVD_cost
     # ====================================================
     # ====================================================
     
@@ -165,6 +168,7 @@ def main(world_size, args):
                                 rsvd_rank = rsvd_rank,
                                 oversampling_parameter = oversampling_parameter,
                                 rsvd_niter = rsvd_niter,
+                                work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost,
                                 damping_type = damping_type, #'adaptive',
                                 clip_type = clip_type)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
@@ -237,7 +241,10 @@ def parse_args():
     parser.add_argument('--n_epochs', type=int, default=10, help='Number_of_epochs' )
     parser.add_argument('--TCov_period', type=int, default=20, help='Period of reupdating Kfactors (not inverses) ' )
     parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTAITONS' )
-      
+    
+    ### added to deal with more efficient wokr allocaiton
+    #
+    parser.add_argument('--work_alloc_propto_RSVD_cost', type=bool, default=True, help='Do we want to allocate work in proportion to actula RSVD cost? set True if yes' ) 
     args = parser.parse_args()
     return args
 
@@ -254,6 +261,7 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nFINISHED AT: = {} \n\n'.format(datetime.now()))
     print('\nFINISHED AT: = {} \n\n'.format(datetime.now()))
+
 
 
 
