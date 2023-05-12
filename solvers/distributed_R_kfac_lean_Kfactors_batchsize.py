@@ -113,7 +113,7 @@ class R_KFACOptimizer(optim.Optimizer):
         
     def _save_input(self, module, input):
         if torch.is_grad_enabled() and self.steps % self.TCov == 0:
-            if module in self.modules_for_this_rank[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
+            if module in self.modules_for_this_rank_A[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
                 #is responsible for this aprticular module
                 # try concatenate reduction
                 aa = self.CovAHandler(input[0].data, module)
@@ -168,7 +168,7 @@ class R_KFACOptimizer(optim.Optimizer):
     def _save_grad_output(self, module, grad_input, grad_output):
         # Accumulate statistics for Fisher matrices
         if self.acc_stats and self.steps % self.TCov == 0:
-            if module in self.modules_for_this_rank[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
+            if module in self.modules_for_this_rank_G[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
                 #is responsible for this aprticular module
                 if self.K_fac_incoming_info_debugger_mode or self.dist_debugger_testing_leanness_thing:
                     print('RANK {} WORLDSIZE {}. At module {} \n ... the G size is {}\n'.format(self.rank, self.world_size, module, grad_output[0].data.shape))
