@@ -228,8 +228,9 @@ class R_KFACOptimizer(optim.Optimizer):
         :return: no returns.
         """
         # we now can have a GPU doing only the A or only the G KFACTOR of a layer/module
+         ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" KFACTORS
+        # ================ AA^T KFACTORS ===================================
         if m in self.modules_for_this_rank_A[self.rank]:
-            ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" layers
             """Do eigen decomposition for computing inverse of the ~ fisher.
             :param m: The layer
             :return: no returns.
@@ -248,7 +249,13 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
-            
+        else:
+            ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
+            #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
+            self.d_a[m] = 0 * self.d_a[m];  self.Q_a[m] = 0 * self.Q_a[m]
+        # ====  END  ======== AA^T KFACTORS ===================================
+        
+        # ================ GG^T KFACTORS ===================================
         if m in self.modules_for_this_rank_G[self.rank]:
             eps = 1e-10  # for numerical stability
             oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
@@ -267,8 +274,8 @@ class R_KFACOptimizer(optim.Optimizer):
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
-            self.d_a[m] = 0 * self.d_a[m];  self.Q_a[m] = 0 * self.Q_a[m]
             self.d_g[m] = 0 * self.d_g[m];  self.Q_g[m] = 0 * self.Q_g[m]
+        # ====== END ======= GG^T KFACTORS ===================================
 
         
     @staticmethod
