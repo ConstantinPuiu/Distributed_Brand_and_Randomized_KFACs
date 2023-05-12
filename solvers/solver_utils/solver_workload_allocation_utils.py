@@ -1,5 +1,31 @@
+# wrappers ###############
+def allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD, batch_size):
+    return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
+                                                                  size_0_of_all_Kfactors_G, 
+                                                                  size_0_of_all_Kfactors_A, 
+                                                                  target_rank_ = target_rank_RSVD,
+                                                                  batch_size_ = batch_size, 
+                                                                  type_of_cost = 'RSVD') 
 
 def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD):
+    return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
+                                                                  size_0_of_all_Kfactors_G, 
+                                                                  size_0_of_all_Kfactors_A, 
+                                                                  target_rank_ = target_rank_RSVD, 
+                                                                  batch_size_ = None, #not required
+                                                                  type_of_cost = 'RSVD')
+
+def allocate_EVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A):
+    return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
+                                                                  size_0_of_all_Kfactors_G, 
+                                                                  size_0_of_all_Kfactors_A, 
+                                                                  target_rank_ = None, #not required
+                                                                  batch_size_ = None, #not required
+                                                                  type_of_cost = 'EVD')
+
+# end wrappers ###############
+
+def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_, batch_size_, type_of_cost):
     #### input:
     #number_of_workers = number of total workers we have ie worldsize
     # size_0_of_all_Kfactors_G - a dictionary where the key is the module, and the value is the size[0] of GG^T K-factor for that module
@@ -25,12 +51,28 @@ def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_K
         modules_as_keys_list_A.append(key)
         # the cost is m^2 r if m > r, and m^3 otherwise. 
         #To avoid large numbers, we divide by r, so m^2 and m^3/r are comapred
-        computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_RSVD) * size_0_of_all_Kfactors_A[key]**2)
+        if type_of_cost == 'EVD':
+            computation_time_for_A.append(size_0_of_all_Kfactors_A[key]**3)
+        elif type_of_cost == 'RSVD':
+            computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_) * size_0_of_all_Kfactors_A[key]**2)
+        elif type_of_cost == 'B':
+            pass
     for key in size_0_of_all_Kfactors_G:
         modules_as_keys_list_G.append(key)
         # the cost is m^2 r if m > r, and m^3 otherwise. 
         #To avoid large numbers, we divide by r, so m^2 and m^3/r are comapred
-        computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_RSVD) * size_0_of_all_Kfactors_G[key]**2)
+        if type_of_cost == 'EVD':
+            computation_time_for_G.append(size_0_of_all_Kfactors_G[key]**3)
+        elif type_of_cost == 'RSVD':
+            computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key]**2)
+        elif type_of_cost == 'B':
+            # in this case target_rank_ is actually target_rank_B + N_BS but leaving same variable name for simplicity
+            # diving cost by (target_rank_ + batch_size_) to make numbers more manageable (arguably not needed)
+            if size_0_of_all_Kfactors_G[key] / (target_rank_ + batch_size_) > 1: # if we perform a true B-update fr this layer
+                computation_time_for_G.append( size_0_of_all_Kfactors_G[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
+            else: # else, we perform an rsvd
+                # here we're assuming the rsvd target rank and the brand target rank are the same
+                computation_time_for_G.append( min(target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2 / (target_rank_ + batch_size_) ) # (target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2
     
     ### compute raw allocations
     optimal_allocation_a, optimal_allocation_g = optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G)
