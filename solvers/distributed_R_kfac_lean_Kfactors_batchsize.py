@@ -12,6 +12,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping)
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
 
 class R_KFACOptimizer(optim.Optimizer):
     def __init__(self,
@@ -29,6 +30,7 @@ class R_KFACOptimizer(optim.Optimizer):
                  rsvd_rank = 220,
                  oversampling_parameter = 10,
                  rsvd_niter = 3,
+                 work_alloc_propto_RSVD_cost = True,
                  damping_type = 'adaptive',
                  clip_type = 'non_standard'):
         
@@ -77,7 +79,6 @@ class R_KFACOptimizer(optim.Optimizer):
         # self.modules_for_this_rank is initialized here!
         self.rank = rank
         self.world_size = world_size
-        self._prepare_model()
         #for it_rank in range(0, world_size):
         #    self.modules_for_this_rank[it_rank] = [] # a dictionary of lists 
         # modules will get appended to list accordingly, later at preparing model
@@ -94,12 +95,21 @@ class R_KFACOptimizer(optim.Optimizer):
         self.rsvd_rank = rsvd_rank
         self.total_rsvd_rank = oversampling_parameter + rsvd_rank
         self.rsvd_niter = rsvd_niter
+        #### specific to Work allocation in proportion to RSVD cost
+        self.work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost
+        self.size_0_of_all_Kfactors_A = {} #once obtained, save for later usage
+        self.size_0_of_all_Kfactors_G = {} #once obtained, save for later usage
+        self.modules_for_this_rank_A = {} # the output of work-schedulling across GPUs for A KFACTORS
+        self.modules_for_this_rank_G = {} # the output of work-schedulling across GPUs for G KFACTORS
         # introduced with RKFAC for te 1st time but also relevant to simple KFAC
         self.damping_type = damping_type
         self.clip_type = clip_type
         ## RKFAC specific init
         self.U_aa, self.D_aa, self.V_aa = {}, {}, {}
         self.U_gg, self.D_gg, self.V_gg = {}, {}, {}
+        
+        # prepare model, and also allocate work across GPUs
+        self._prepare_model()
         
     def _save_input(self, module, input):
         if torch.is_grad_enabled() and self.steps % self.TCov == 0:
@@ -119,6 +129,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 
                 if self.steps == 0: # Initialize buffers
                     self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                    self.size_0_of_all_Kfactors_A[module] = aa.size(0)
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 else:
@@ -145,7 +156,8 @@ class R_KFACOptimizer(optim.Optimizer):
                 if self.steps == 0:
                     aa = self.CovAHandler(input[0].data, module)
                     # save the size
-                    self.size_of_missing_m_aa[module] = aa.size(0)
+                    self.size_of_missing_m_aa[module] = aa.size(0) # this dict also tells us which modules are missing: might delete to avoid redundancy later
+                    self.size_0_of_all_Kfactors_A[module] = aa.size(0)
                     # initialize required EVD quantities correctly as zero 
                     #(could do this in the inversion funciton but it's best done here to avoid using torch.zeros)
                     actual_rank = min(aa.shape[0], self.rsvd_rank)
@@ -165,6 +177,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 if self.steps == 0: # Initialize buffers
                     # self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
                     self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                    self.size_0_of_all_Kfactors_G[module] = gg.size(0)
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 else:
@@ -175,6 +188,7 @@ class R_KFACOptimizer(optim.Optimizer):
                     gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
                     # save the size
                     self.size_of_missing_m_gg[module] = gg.size(0)
+                    self.size_0_of_all_Kfactors_G[module] = gg.size(0)
                     # initialize required EVD quantities correctly as zero 
                     #(could do this in the inversion funciton but it's best done here to avoid using torch.zeros)
                     actual_rank = min(gg.shape[0], self.rsvd_rank)
@@ -196,31 +210,47 @@ class R_KFACOptimizer(optim.Optimizer):
                 print('(%s): %s' % (count, module))
                 count += 1
         
+        ### WORK ALLOCATION temporary (for self.steps ==0 only)... or not! depending on choice
+        # IMPORTANT: USING THE TRIVIAL ALLOCATION MECHANISM ON THE 1st FACTOR COMPUTATION
+        # HTIS IS BECAUSE WE CAN'T ACCESS DIMENSIONS UNLESS A PASS HAS BEEN DONE: can't access layer params if net is "black-box" (not defined by us)
+        # THUS, we first do a trivial number-of layers based allocation (i.e. assuming they're all the same) 
+        # and after that, IF SELECTED SO THROUGH HYPERPARAM work_alloc_propto_RSVD_cost, we'll swtich to a more efficient one, once a pass has been done
         # construct self.modules_for_this_rank (a dictonary of lists] - which tells us which modules's EVD  are computed by which GPU
-        self.modules_for_this_rank = fct_split_list_of_modules(self.modules, self.world_size)
+        self.modules_for_this_rank_A = self.modules_for_this_rank_G = fct_split_list_of_modules(self.modules, self.world_size)
+        # call the same fct for A and G to get the same TRIVIAL split in both A and G: that boils down to being a module-split rather than a KFACTOR split
         # returns a dictionary of lists!
+        print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+        print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
 
     def _update_inv(self, m):
         """Do eigen decomposition for computing inverse of the ~ fisher.
         :param m: The layer
         :return: no returns.
         """
-        if m in self.modules_for_this_rank[self.rank]:
+        # we now can have a GPU doing only the A or only the G KFACTOR of a layer/module
+        if m in self.modules_for_this_rank_A[self.rank]:
             ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" layers
             """Do eigen decomposition for computing inverse of the ~ fisher.
             :param m: The layer
             :return: no returns.
             """
             eps = 1e-10  # for numerical stability
-            #self.d_a[m], self.Q_a[m] = torch.symeig( self.m_aa[m] + 0.01* torch.eye(self.m_aa[m].shape[0], device = torch.device('cuda:0'))  , eigenvectors=True)
             oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
             actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
             self.U_aa[m], self.D_aa[m], self.V_aa[m] = torch.svd_lowrank(self.m_aa[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
             self.Q_a[m] = self.V_aa[m][:,:actual_rank] + 0.0 # 0.5*(self.U_aa[m][:,:actual_rank] + self.V_aa[m][:,:actual_rank]); 
             del self.U_aa[m]; del self.V_aa[m]
             self.d_a[m] = self.D_aa[m][:actual_rank]; # self.d_a[m][ self.d_a[m] < self.damping] = self.damping
-        
-            #self.d_g[m], self.Q_g[m] = torch.symeig( self.m_gg[m] , eigenvectors=True) # computes the eigen decomposition of bar_A and G matrices
+            
+            self.d_a[m].mul_((self.d_a[m] > eps).float())
+            #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
+            self.Q_a[m] = self.Q_a[m].contiguous()
+            if self.dist_comm_for_layers_debugger:
+                print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
+                print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
+            
+        if m in self.modules_for_this_rank_G[self.rank]:
+            eps = 1e-10  # for numerical stability
             oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
             actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
             self.U_gg[m], self.D_gg[m], self.V_gg[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M=None) # this is rsvd
@@ -228,15 +258,12 @@ class R_KFACOptimizer(optim.Optimizer):
             del self.U_gg[m]; del self.V_gg[m]
             self.d_g[m] = self.D_gg[m][ : actual_rank ]; # d_g[m][ d_g[m] < self.damping ] = self.damping
     
-            self.d_a[m].mul_((self.d_a[m] > eps).float())
             self.d_g[m].mul_((self.d_g[m] > eps).float())
-            
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
-            self.Q_a[m] = self.Q_a[m].contiguous()
             self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
-                print('The shapes are Q_a.shape = {}, d_a.shape = {}, Q_q.shape = {}, d_g.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape, self.Q_g[m].shape,self.d_g[m].shape))
+                print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -376,19 +403,34 @@ class R_KFACOptimizer(optim.Optimizer):
             classname = m.__class__.__name__
             if self.steps % self.TInv == 0: # if the inversion was done locally this turn, allreduce to disseminate inverse representation
                 if self.dist_comm_for_layers_debugger:
-                    print('RANK {} WORLDSIZE {} MODULE {}. Before Allreduce d_a={}, Q_g = {} \n'.format(self.rank, self.world_size, m, self.d_a[m], self.Q_g[m]))
+                    print('RANK {} WORLDSIZE {} MODULE {}. Before Allreduce d_a={}, Q_a = {}, d_g={}, Q_g = {} \n'.format(self.rank, self.world_size, m, self.d_a[m], self.Q_a[m], self.d_g[m], self.Q_g[m]))
                 dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)
                 dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = False)
                 dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)
                 dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)
                 if self.dist_comm_for_layers_debugger:
-                    print('RANK {} WORLDSIZE {} MODULE {}. AFTER Allreduce d_a={}, Q_g = {} \n'.format(self.rank, self.world_size, m, self.d_a[m], self.Q_g[m]))
+                    print('RANK {} WORLDSIZE {} MODULE {}. AFTER Allreduce d_a={}, Q_a = {}, d_g={}, Q_g = {} \n'.format(self.rank, self.world_size, m, self.d_a[m], self.Q_a[m], self.d_g[m], self.Q_g[m]))
             p_grad_mat = self._get_matrix_form_grad(m, classname)
             v = self._get_natural_grad(m, p_grad_mat, damping)
             updates[m] = v
         self._kl_clip_and_update_grad(updates, lr)
-
+        
+        #### change work allocation to dimension-based for RSVD
+        if self.steps == 0 and self.work_alloc_propto_RSVD_cost == True: # allocate work over KFACTORS in proportion to RSVD cost
+                # output of allocate_RSVD_inversion_work_same_fixed_r
+                # dict_of_lists_of_responsibilities_A = a dictionary where the key is the wwrker number 
+                # and the value is the list of all modules that particular worker is responsible for at Kfactor AA^T
+                # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
+                # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
+                self.modules_for_this_rank_A, self.modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
+                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
+                                                                                    target_rank_RSVD = self.rsvd_rank)
+                print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == 0, we reallocated work in proportion to squared-size')
+                print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+        
         self._step(closure)
         self.steps += 1
+
 
 
