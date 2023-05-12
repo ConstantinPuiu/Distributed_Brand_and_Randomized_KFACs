@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#SBATCH --time=00:30:00
+#SBATCH --time=00:20:00
 #SBATCH --job-name=2G_K
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:2 --constraint='gpu_sku:V100'
+#SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=2
 #SBATCH --gpus-per-task=1
