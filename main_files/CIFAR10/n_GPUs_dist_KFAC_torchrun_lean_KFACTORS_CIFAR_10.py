@@ -118,6 +118,9 @@ def main(world_size, args):
     TInv_period = args.TInv_period
     # ====================================================
     
+    ### FLAG for efficient wor allocaiton  ###
+    work_alloc_propto_EVD_cost = args.work_alloc_propto_EVD_cost
+    
     ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
     # dict to have schedule! eys are epochs: key map to frequency, stuff only changes at keys and then stays constant.
     KFAC_matrix_update_frequency_dict = {0: TCov_period, 5: TCov_period}#, 10: 5, 20: 5, 22: 5, 50: 5}
@@ -152,10 +155,11 @@ def main(world_size, args):
 
     optimizer =  KFACOptimizer(model, rank = rank, world_size = world_size, 
                                lr_function = l_rate_function, momentum = momentum, stat_decay = stat_decay, 
-                            kl_clip = kfac_clip, damping = KFAC_damping, 
-                            weight_decay = WD, TCov = KFAC_matrix_update_frequency,
-                            TInv = KFAC_matrix_invert_frequency)#    optim.SGD(model.parameters(),
-                              #lr=0.01, momentum=0.5) #Your_Optimizer()
+                                kl_clip = kfac_clip, damping = KFAC_damping, 
+                                weight_decay = WD, TCov = KFAC_matrix_update_frequency,
+                                TInv = KFAC_matrix_invert_frequency,
+                                work_alloc_propto_EVD_cost = work_alloc_propto_EVD_cost)#    optim.SGD(model.parameters(),
+                                #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
     
@@ -213,6 +217,8 @@ def parse_args():
     parser.add_argument('--TCov_period', type=int, default = 20, help = 'Period of reupdating Kfactors (not inverses)' )
     parser.add_argument('--TInv_period', type=int, default = 100, help = 'Period of reupdating K-factor INVERSE REPREZENTAITONS' )
     
+    #### for efficient work allocaiton selection
+    parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
     args = parser.parse_args()
     return args
 

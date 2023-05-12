@@ -15,7 +15,7 @@ def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_K
                                                                   batch_size_ = None, #not required
                                                                   type_of_cost = 'RSVD')
 
-def allocate_EVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A):
+def allocate_EVD_inversion_work(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
                                                                   size_0_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A, 
