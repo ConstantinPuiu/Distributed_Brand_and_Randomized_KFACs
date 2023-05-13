@@ -74,7 +74,7 @@ class KFACOptimizer(optim.Optimizer):
         # self.modules_for_this_rank is initialized here!
         self.rank = rank
         self.world_size = world_size
-        self._prepare_model()
+        
         #for it_rank in range(0, world_size):
         #    self.modules_for_this_rank[it_rank] = [] # a dictionary of lists 
         # modules will get appended to list accordingly, later at preparing model
@@ -92,6 +92,8 @@ class KFACOptimizer(optim.Optimizer):
         self.size_0_of_all_Kfactors_G = {} #once obtained, save for later usage
         self.modules_for_this_rank_A = {} # the output of work-schedulling across GPUs for A KFACTORS
         self.modules_for_this_rank_G = {} # the output of work-schedulling across GPUs for G KFACTORS
+
+        self._prepare_model()
 
     def _save_input(self, module, input):
         if torch.is_grad_enabled() and self.steps % self.TCov == 0:
