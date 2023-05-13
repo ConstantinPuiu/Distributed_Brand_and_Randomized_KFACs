@@ -132,7 +132,7 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_A): # we could also say "not in self.m_aa[module], but this has less control over the situation
+                elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
                     #the first time we enter here after the efficient allocation is at step number self.TCov 
                     self.m_aa[module] = (1 - self.stat_decay) * aa + 0
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
@@ -443,20 +443,19 @@ class R_KFACOptimizer(optim.Optimizer):
                                                                                     size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
                                                                                     size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
                                                                                     target_rank_RSVD = self.rsvd_rank)
-                # self.Q_a
                 ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
-                #### delete what's in OLD but NOT in new
-                for key_A_old in self.modules_for_this_rank_A:
-                    if key_A_old not in new_modules_for_this_rank_A:
+                #### 1. delete what's in OLD but NOT in new
+                for key_A_old in self.modules_for_this_rank_A[self.rank]:
+                    if key_A_old not in new_modules_for_this_rank_A[self.rank]:
                         # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
                         # self.d_a[key_A_old] = 0 * self.d_a[key_A_old]; self.Q_a[key_A_old] = 0 * self.Q_a[key_A_old]
                         del self.m_aa[key_A_old]
-                for key_G_old in self.modules_for_this_rank_G:
-                    if key_G_old not in new_modules_for_this_rank_G:
+                for key_G_old in self.modules_for_this_rank_G[self.rank]:
+                    if key_G_old not in new_modules_for_this_rank_G[self.rank]:
                         # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
                         # self.d_g[key_G_old] = 0 * self.d_g[key_G_old]; self.Q_g[key_G_old] = 0 * self.Q_g[key_G_old]
                         del self.m_gg[key_G_old]
-                #### initialize what's in NEW but NOT in old (and thus does nto exist)
+                #### 2. initialize what's in NEW but NOT in old (and thus does nto exist)
                 ## we do this in save_inuput and _save_grad_output hooks
                 ## but in order to do that we need to rememeber the old keys first
                 self.old_modules_for_this_rank_A = self.modules_for_this_rank_A
