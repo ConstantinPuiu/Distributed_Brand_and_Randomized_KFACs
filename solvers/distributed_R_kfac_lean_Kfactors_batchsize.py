@@ -132,6 +132,11 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
+                elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_A): # we could also say "not in self.m_aa[module], but this has less control over the situation
+                    #the first time we enter here after the efficient allocation is at step number self.TCov 
+                    self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                    # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
+                    # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                 else:
                     update_running_stat(aa, self.m_aa[module], self.stat_decay)
                 
@@ -180,6 +185,11 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.size_0_of_all_Kfactors_G[module] = gg.size(0)
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
+                elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_G): # we could also say "not in self.m_aa[module], but this has less control over the situation
+                    #the first time we enter here after the efficient allocation is at step number self.TCov
+                    self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                    # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
+                    # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                 else:
                     update_running_stat(gg, self.m_gg[module], self.stat_decay)
                 
@@ -429,10 +439,30 @@ class R_KFACOptimizer(optim.Optimizer):
                 # and the value is the list of all modules that particular worker is responsible for at Kfactor AA^T
                 # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
                 # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
-                self.modules_for_this_rank_A, self.modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
                                                                                     size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
                                                                                     size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
                                                                                     target_rank_RSVD = self.rsvd_rank)
+                # self.Q_a
+                ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
+                #### delete what's in OLD but NOT in new
+                for key_A_old in self.modules_for_this_rank_A:
+                    if key_A_old not in new_modules_for_this_rank_A:
+                        # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
+                        # self.d_a[key_A_old] = 0 * self.d_a[key_A_old]; self.Q_a[key_A_old] = 0 * self.Q_a[key_A_old]
+                        del self.m_aa[key_A_old]
+                for key_G_old in self.modules_for_this_rank_G:
+                    if key_G_old not in new_modules_for_this_rank_G:
+                        # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
+                        # self.d_g[key_G_old] = 0 * self.d_g[key_G_old]; self.Q_g[key_G_old] = 0 * self.Q_g[key_G_old]
+                        del self.m_gg[key_G_old]
+                #### initialize what's in NEW but NOT in old (and thus does nto exist)
+                ## we do this in save_inuput and _save_grad_output hooks
+                ## but in order to do that we need to rememeber the old keys first
+                self.old_modules_for_this_rank_A = self.modules_for_this_rank_A
+                self.old_modules_for_this_rank_G = self.modules_for_this_rank_G
+                self.modules_for_this_rank_A = new_modules_for_this_rank_A
+                self.modules_for_this_rank_G = new_modules_for_this_rank_G
                 print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == 0, we reallocated work in proportion to squared-size')
                 print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
         
