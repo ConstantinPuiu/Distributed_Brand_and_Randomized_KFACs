@@ -211,7 +211,7 @@ if __name__ == '__main__': ### testing
     print('TESTING outer function')
     number_of_workers = 7
     
-    target_rank_RSVD = 0.001 #220 # set to 5 to avoid the x min(1,m/r) effect!
+    target_rank_RSVD = 20 #220 # set to very low to avoid the x min(1,m/r) effect!
     print('Output:')
     print(allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD))
 
