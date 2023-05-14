@@ -341,7 +341,7 @@ class B_KFACOptimizer(optim.Optimizer):
         # call the same fct for A and G to get the same TRIVIAL split in both A and G: that boils down to being a module-split rather than a KFACTOR split
         # returns a dictionary of lists!
         print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n\n self.modules_for_this_rank_G = {}'.format(self.initalloc_modules_for_this_rank_A, self.initalloc_modules_for_this_rank_G))
-        print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
+        print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_and_B_cost))
 
     def _update_inv(self, m):
         """Do eigen decomposition for computing inverse of the ~ fisher.
@@ -579,7 +579,7 @@ class B_KFACOptimizer(optim.Optimizer):
         #### 1. Change work allocation or 2. rearrange variables maintaining the same wokr alloation (2 is there to simply integrate the case of choosing trivial alloc vs efficient allocation)
         #### change work allocation to dimension-based for RSVD
         if self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == True:
-            raise NotImplementedError('self.work_alloc_propto_RSVD_cost == True case not implemented yet! Coming in next commit or so!')
+            raise NotImplementedError('self.work_alloc_propto_RSVD_and_B_cost == True case not implemented yet! Coming in next commit or so!')
         elif self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == False:
             ## if we don't want to reallocate in an efficient way, we still need to split each allocated list we have into 1 for LL and 1 for CaSL
             ### 1. construct self.LL_modules_for_this_rank_A and self.CaSL_modules_for_this_rank_A dictionaries
