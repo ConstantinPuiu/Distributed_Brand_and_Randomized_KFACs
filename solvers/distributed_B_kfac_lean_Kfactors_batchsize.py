@@ -159,6 +159,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 # otherwise, we recompute "efficient" realllocations at the end of step 0
                 # both these approaches in 2 require us to know which layer is LL and whic isn;t, and the latter requires the size of the layer, which we get at self.steps ==0, and that's why we treat it sepparately
                 aa = self.CovAHandler(input[0].data, module)
+                self.nkfu_dict_a[module] = 1
                 
                 #### see whether the module is LL or not, and save the size to the corresponding dicitonary  ###########
                 # we save sizes for ALL modules, not just for the ones allocated to *this GPU
@@ -185,7 +186,6 @@ class B_KFACOptimizer(optim.Optimizer):
                         self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
                                                                             A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
                                                                             device = torch.device('cuda:{}'.format(self.rank)) )
-                        self.nkfu_dict_a[module] = 1
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
                         actual_rank = self.rsvd_rank + input[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
@@ -197,26 +197,26 @@ class B_KFACOptimizer(optim.Optimizer):
                     #strictly speaking this elif could be simple "else" if all works correctly elsewhere (because the 2 sets are a partition of the total set of registered modules), but we use elif to make it explicit
                     if module in self.initalloc_modules_for_this_rank_A[self.rank]:
                         self.m_aa[module] = (1 - self.stat_decay) * aa + 0
-                        self.nkfu_dict_a[module] = 1
                     else:
                         actual_rank = min(aa.shape[0], self.rsvd_rank)
                         self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                
-            elif module in self.LL_modules_for_this_rank_A[self.rank] and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
-                # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
-                ############ BRAND UPDATE ############################
-                batch_size = input[0].data.shape[0] #  c_dim = input[0].data.shape[0]
-                A = input[0].data / (batch_size + 0)**(0.5)
-                if module.bias is not None:
-                    #print('\n Updating AA^T: we have bias in linear layer!')
-                    A = torch.cat([A, A.new(A.size(0), 1).fill_(1)], 1).T
-
-                self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
-                                                                    A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
-                                                                    device = torch.device('cuda:{}'.format(self.rank)) )
-                self.nkfu_dict_a[module] += 1
-                ########### END BRAND UPDATE #########################
+            elif module in self.LL_modules_for_this_rank_A[self.rank]:
+                if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                    # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
+                    ############ BRAND UPDATE ############################
+                    batch_size = input[0].data.shape[0] #  c_dim = input[0].data.shape[0]
+                    A = input[0].data / (batch_size + 0)**(0.5)
+                    if module.bias is not None:
+                        #print('\n Updating AA^T: we have bias in linear layer!')
+                        A = torch.cat([A, A.new(A.size(0), 1).fill_(1)], 1).T
+    
+                    self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
+                                                                        A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
+                                                                        device = torch.device('cuda:{}'.format(self.rank)) )
+                    self.nkfu_dict_a[module] += 1
+                    ########### END BRAND UPDATE #########################
             elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
                 # if the module is the responsibility of *this GPU, AND the module is NOT on Brand-track
                 #### update m_aa###############################################
@@ -225,12 +225,14 @@ class B_KFACOptimizer(optim.Optimizer):
                 self.nkfu_dict_a[module] += 1
             else: 
                 # if the module is NOT the responsibility of *this GPU AT ALL!
-                if module in self.size_0_of_LL_Kfactors_A and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
-                    # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
-                    # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
-                    self.d_a[module] = 0 * self.d_a[module]; self.Q_a[module] = 0 * self.Q_a[module]
-                else: #elif module not in self.size_0_of_LL_Kfactors_A:
-                    pass # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
+                if module in self.size_0_of_LL_Kfactors_A:
+                    if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
+                        # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
+                        # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
+                        self.d_a[module] = 0 * self.d_a[module]; self.Q_a[module] = 0 * self.Q_a[module]
+                        self.nkfu_dict_a[module] += 1
+                elif module in self.size_0_of_CaSL_Kfactors_A: #elif module not in self.size_0_of_LL_Kfactors_A:
+                    self.nkfu_dict_a[module] += 1 # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
             #########################################################
 
     def _save_grad_output(self, module, grad_input, grad_output):
@@ -244,7 +246,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 # otherwise, we recompute "efficient" realllocations at the end of step 0
                 # both these approaches in 2 require us to know which layer is LL and whic isn;t, and the latter requires the size of the layer, which we get at self.steps ==0, and that's why we treat it sepparately
                 gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
-                
+                self.nkfu_dict_g[module] = 1
                 #### see whether the module is LL or not, and save the size to the corresponding dicitonary  ###########
                 # we save sizes for ALL modules, not just for the ones allocated to *this GPU
                 # note that by saving the size in the correct dictionary we also implicitly sve info about whether one layer is LL or is CaSL
@@ -270,7 +272,7 @@ class B_KFACOptimizer(optim.Optimizer):
                         self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
                                                                             A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
                                                                             device = torch.device('cuda:{}'.format(self.rank)) )
-                        self.nkfu_dict_g[module] = 1
+                        
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
                         actual_rank = self.rsvd_rank + grad_output[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
@@ -281,26 +283,26 @@ class B_KFACOptimizer(optim.Optimizer):
                     #strictly speaking this elif could be simple "else" if all works correctly elsewhere (because the 2 sets are a partition of the total set of registered modules), but we use elif to make it explicit
                     if module in self.initalloc_modules_for_this_rank_G[self.rank]:
                         self.m_gg[module] = (1 - self.stat_decay) * gg + 0
-                        self.nkfu_dict_g[module] = 1
                     else:
                         actual_rank = min(gg.shape[0], self.rsvd_rank)
                         self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                
-            elif module in self.LL_modules_for_this_rank_G[self.rank] and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
-                # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
-                ############ BRAND UPDATE ############################
-                batch_size =  grad_output[0].data.shape[0] # c_dim =batch_size
-                if self.batch_averaged:
-                    G = grad_output[0].data.T * (batch_size + 0.0)**0.5
-                else:
-                    G = grad_output[0].data.T / (batch_size + 0.0)**0.5
-            
-                self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
-                                                                    A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
-                                                                    device = torch.device('cuda:{}'.format(self.rank)) )
-                self.nkfu_dict_g[module] += 1
-                ########### END BRAND UPDATE #########################
+            elif module in self.LL_modules_for_this_rank_G[self.rank]:
+                if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                    # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
+                    ############ BRAND UPDATE ############################
+                    batch_size =  grad_output[0].data.shape[0] # c_dim =batch_size
+                    if self.batch_averaged:
+                        G = grad_output[0].data.T * (batch_size + 0.0)**0.5
+                    else:
+                        G = grad_output[0].data.T / (batch_size + 0.0)**0.5
+                
+                    self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
+                                                                        A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
+                                                                        device = torch.device('cuda:{}'.format(self.rank)) )
+                    self.nkfu_dict_g[module] += 1
+                    ########### END BRAND UPDATE #########################
             elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
                 # if the module is the responsibility of *this GPU, AND the module is NOT on Brand-track
                 #### update m_gg ###############################################
@@ -309,12 +311,14 @@ class B_KFACOptimizer(optim.Optimizer):
                 self.nkfu_dict_g[module] += 1
             else: 
                 # if the module is NOT the responsibility of *this GPU AT ALL!
-                if module in self.size_0_of_LL_Kfactors_G and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
-                    # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
-                    # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
-                    self.d_g[module] = 0 * self.d_g[module]; self.Q_g[module] = 0 * self.Q_g[module]
-                else: #elif module not in self.size_0_of_LL_Kfactors_A:
-                    pass # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
+                if module in self.size_0_of_LL_Kfactors_G:
+                    if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
+                        # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
+                        # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
+                        self.d_g[module] = 0 * self.d_g[module]; self.Q_g[module] = 0 * self.Q_g[module]
+                        self.nkfu_dict_g[module] += 1
+                elif module in self.size_0_of_CaSL_Kfactors_G: #elif module not in self.size_0_of_LL_Kfactors_A:
+                    self.nkfu_dict_g[module] += 1 # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
             #########################################################
             ##########################################################
             
