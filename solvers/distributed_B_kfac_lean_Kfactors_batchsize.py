@@ -17,7 +17,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subrout
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping, RSVD_lowrank)
 
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_B_inversion_work_same_fixed_r_and_batchsize
 
 class B_KFACOptimizer(optim.Optimizer):
     def __init__(self,
@@ -124,8 +124,6 @@ class B_KFACOptimizer(optim.Optimizer):
         self.size_of_missing_m_gg = {} # dictionary tracking the size of lazy GG^T kfactors 
         self.size_of_nonlazy_Kfactors_a = {} # dictionary tracking the size of NON-lazy & non-brand-tracked AA^T kfactors 
         self.size_of_nonlazy_Kfactors_g = {} # dictionary tracking the size of NON-lazy & non-brand-tracked AA^T kfactors 
-        self.Brand_track_update_module_list_a = [] # this list is THE SAME for each GPU, the global Brand-tracked list of Kfactor
-        self.Brand_track_update_module_list_g = [] # this list is THE SAME for each GPU, the global Brand-tracked list of Kfactor
         
         ################ for efficient work allocation
         self.work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost
@@ -342,7 +340,7 @@ class B_KFACOptimizer(optim.Optimizer):
         self.initalloc_modules_for_this_rank_A = self.initalloc_modules_for_this_rank_G = fct_split_list_of_modules(self.modules, self.world_size)
         # call the same fct for A and G to get the same TRIVIAL split in both A and G: that boils down to being a module-split rather than a KFACTOR split
         # returns a dictionary of lists!
-        print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+        print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n\n self.modules_for_this_rank_G = {}'.format(self.initalloc_modules_for_this_rank_A, self.initalloc_modules_for_this_rank_G))
         print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
 
     def _update_inv(self, m):
@@ -540,7 +538,7 @@ class B_KFACOptimizer(optim.Optimizer):
         # take the step and allreduce across evd's if the inverses were updated    
         for m in self.modules:
             classname = m.__class__.__name__
-            if ((m not in self.Brand_track_update_module_list_a) and (self.steps % self.TInv == 0)) or ((m in self.Brand_track_update_module_list_a) and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0)):
+            if ((m not in self.size_0_of_LL_Kfactors_A) and (self.steps % self.TInv == 0)) or ((m in self.size_0_of_LL_Kfactors_A) and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0)):
                 # if the inversion was done locally this turn, allreduce to disseminate inverse representation
                 #if it's time to recompute inverse for Conv layers or for liear (BRAND) layers
                 if self.dist_comm_for_layers_debugger:
@@ -558,7 +556,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_a={}, size_d_a = {}, Q_a = {}, size_Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.d_a[m].shape, self.Q_a[m], self.Q_a[m].shape))
             
-            if ((m not in self.Brand_track_update_module_list_g) and (self.steps % self.TInv == 0)) or ((m in self.Brand_track_update_module_list_g) and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0)):
+            if ((m not in self.size_0_of_LL_Kfactors_A) and (self.steps % self.TInv == 0)) or ((m in self.size_0_of_LL_Kfactors_G) and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0)):
                 #print('RANK {}. Doing line : dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_g={}, size_d_g = {}, Q_g = {}, size_Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.d_g[m].shape, self.Q_g[m], self.Q_g[m].shape))
