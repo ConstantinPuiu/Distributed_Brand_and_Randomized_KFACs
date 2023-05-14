@@ -85,7 +85,6 @@ class B_KFACOptimizer(optim.Optimizer):
         # self.modules_for_this_rank is initialized here!
         self.rank = rank
         self.world_size = world_size
-        self._prepare_model()
         #for it_rank in range(0, world_size):
         #    self.modules_for_this_rank[it_rank] = [] # a dictionary of lists 
         # modules will get appended to list accordingly, later at preparing model
@@ -144,6 +143,8 @@ class B_KFACOptimizer(optim.Optimizer):
         ### number of Kfactors updates stored for each kfactor: dictionaries
         self.nkfu_dict_a = {} # these will be different on each GPU, but that's not a concern. Each GPU will have the correct values for its tracked modules
         self.nkfu_dict_g = {}
+        
+        self._prepare_model()
         
     def _save_input(self, module, input):
         if self.batch_size == None and isinstance(module, nn.Linear): ### save batchsize
