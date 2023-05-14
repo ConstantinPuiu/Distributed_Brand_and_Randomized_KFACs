@@ -16,6 +16,9 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subroutine import Brand_S_update
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping, RSVD_lowrank)
 
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
+
 class B_KFACOptimizer(optim.Optimizer):
     def __init__(self,
                  model,
@@ -35,7 +38,8 @@ class B_KFACOptimizer(optim.Optimizer):
                  damping_type = 'adaptive',
                  clip_type = 'non_standard',
                  brand_r_target_excess = 0,
-                 brand_update_multiplier_to_TCov = 1):
+                 brand_update_multiplier_to_TCov = 1,
+                 work_alloc_propto_RSVD_and_B_cost = True):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -123,79 +127,57 @@ class B_KFACOptimizer(optim.Optimizer):
         self.Brand_track_update_module_list_a = [] # this list is THE SAME for each GPU, the global Brand-tracked list of Kfactor
         self.Brand_track_update_module_list_g = [] # this list is THE SAME for each GPU, the global Brand-tracked list of Kfactor
         
+        ################ for efficient work allocation
+        self.work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost
+        ### dict for sizes of all modules, split by LL vs CaSL cathegory
+        self.size_0_of_LL_Kfactors_A = {} # here, LL refers to large linear layers, large is in the sense that "B-update makes sense", loosely speaking
+        self.size_0_of_LL_Kfactors_G = {} # and the B-update makes sense if brand_target_rank +nBS < shape of KFACTOR
+        self.size_0_of_CaSL_Kfactors_A = {} # hare CaSL = "Conv and Small linear layers"
+        self.size_0_of_CaSL_Kfactors_G = {} # small is defined as non-large for large defined as 2 lines above
         
+        ### allocation of work for Casl and LL KFACTORS sepparately
+        self.LL_modules_for_this_rank_A = {} # the output of work-schedulling across GPUs for A KFACTORS: relevant to  B-updates
+        self.LL_modules_for_this_rank_G = {} # the output of work-schedulling across GPUs for G KFACTORS: relevant to  B-updates
+        self.CaSL_modules_for_this_rank_A = {} # the output of work-schedulling across GPUs for A KFACTORS: relevant to R-updates
+        self.CaSL_modules_for_this_rank_G = {} # the output of work-schedulling across GPUs for G KFACTORS: relevant to R-updates
+        self.initalloc_modules_for_this_rank_A = {}
+        self.initalloc_modules_for_this_rank_G = {} # these latter 2 dictionaries are only used at the 0th step: to deal with the fact that we don't knwo what layer is LL and what layer is not LL at 0th step (unless another pass is made, which we avoid as it's cosntly)
+        
+        ### number of Kfactors updates stored for each kfactor: dictionaries
+        self.nkfu_dict_a = {} # these will be different on each GPU, but that's not a concern. Each GPU will have the correct values for its tracked modules
+        self.nkfu_dict_g = {}
         
     def _save_input(self, module, input):
-        ### save batchsize
-        if self.batch_size == None and isinstance(module, nn.Linear):
+        if self.batch_size == None and isinstance(module, nn.Linear): ### save batchsize
             self.batch_size = input[0].data.shape[0]
         if torch.is_grad_enabled() and self.steps % self.TCov == 0:
-            if module in self.modules_for_this_rank[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
-                #is responsible for this aprticular module
-                # try concatenate reduction
-                if self.steps == 0: # compute gg only for appropriate layers (non-brand ones), but for all at beginning to get dimensions
-                    aa = self.CovAHandler(input[0].data, module)
-                    self.size_of_nonlazy_Kfactors_a[module] = aa.shape[0]
-                elif not (module in self.Brand_track_update_module_list_a):
-                    aa = self.CovAHandler(input[0].data, module)
+            #########################################################
+            if self.steps == 0:
+                # at the 0th step, we don;t know yet which layers are LL and which are otherwise
+                # so we have to treat this case sepparately: 1. we perform "trivial allocation" across modules rather than KFACTORS
+                # then 2. if we wisht o stick to the trivial allocation, we merely split this trivial allocation dict into the 2
+                # dictionaries self.LL_modules_for_this_rank_A and self.CaSL_modules_for_this_rank_A at the very end of step 0
+                # otherwise, we recompute "efficient" realllocations at the end of step 0
+                # both these approaches in 2 require us to know which layer is LL and whic isn;t, and the latter requires the size of the layer, which we get at self.steps ==0, and that's why we treat it sepparately
+                aa = self.CovAHandler(input[0].data, module)
                 
-                ############ DEBUG ONLY #########
-                if self.debug_size_for_B:
-                    aa = self.CovAHandler(input[0].data, module)
-                    print('\n\n at aa Kfactor module {}: COMPARING aa.shape[0] = {} to input[0].data.shape[1] = {} '.format(module, aa.shape[0],input[0].data.shape[1]))
-                
-                if self.Dist_communication_debugger:
-                    print('RANK {} WORLDSIZE {}. At module {}. AA^T Value BEFORE reducing is = {}\n'.format(
-                        self.rank, self.world_size, module, aa))
-                
-                if self.K_fac_incoming_info_debugger_mode or self.dist_debugger_testing_leanness_thing:
-                    print('RANK {} WORLDSIZE {}. At module {} \n ... the A size is {}\n'.format(self.rank, self.world_size, module, input[0].data.shape))
-                ############ END DEBUG ONLY #########
-                
-                # Initialize buffers
-                if self.steps == 0:
-                    if isinstance(module, nn.Linear) and (self.brand_r_target + input[0].data.shape[0] < aa.shape[0]): # only for linear layers which are IN THE LIST OF work
-                        # we need to initialize Q and d! for conv layers in the work list we'll get them auto from RSVD, and for non-work we'll get them init to zero accordingly
-                        #self.d_a[module] = 0 * aa[0,:1] # initialize with a rank-1 null tensor for minila computational effort!
-                        #self.Q_a[module] = 0 * aa[:,:1] + 1
-                        
-                        self.d_a[module] = 0 * aa[0,:self.brand_r_target] # initialize with a rank-brand_target_rank null tensor for minila computational effort!
-                        self.Q_a[module] = 0 * aa[:,:self.brand_r_target] # can't do a mere rank 1 as that would give wrong size at communication
+                #### see whether the module is LL or not, and save the size to the corresponding dicitonary  ###########
+                # we save sizes for ALL modules, not just for the ones allocated to *this GPU
+                # note that by saving the size in the correct dictionary we also implicitly sve info about whether one layer is LL or is CaSL
+                if isinstance(module, nn.Linear) and (self.brand_r_target + input[0].data.shape[0] < aa.shape[0]):
+                    self.size_0_of_LL_Kfactors_A[module] = aa.shape[0] 
+                else:
+                    self.size_0_of_CaSL_Kfactors_A[module] = aa.shape[0] 
+                ##### end: save module size to the correct dictioanry depending on whether "is LL" or not ##############
+                    
+                if module in self.size_0_of_LL_Kfactors_A: # the keys of this dict are all the LL layers
+                    if module in self.initalloc_modules_for_this_rank_A[self.rank]: # for LL layers alloc to *this GPU, perform B update
+                        # initialize for brand-update first
+                        self.d_a[module] = 0 * aa[0, :self.brand_r_target] # initialize with a rank-brand_target_rank null tensor for minila computational effort!
+                        self.Q_a[module] = 0 * aa[:, :self.brand_r_target] # can't do a mere rank 1 as that would give wrong size at communication
                         self.Q_a[module][range(0, self.brand_r_target), range(0, self.brand_r_target)] = 1
-                        self.Brand_track_update_module_list_a.append(module) # remember the module in the list of Brand-active modules
-                        # in the if above we also have the 2nd condition to ensure we don't do BRAN update when RSVD update is cheaper due to too small size (Essentially)
-                    else: # initialize non-linear layers Kfactors with 0: the identity init is sent to the reg term 
-                        #(decay with iter accounted for)! We also avoid doing an RSVD on self.steps == 0 as this is useless!
-                        # we'll pass the zero tensors 
-                        self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(0))
-                    # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                
-                ############ DEBUG ONLY #########
-                if self.Dist_communication_debugger:
-                    aa_local = aa + 0
-                    aa = aa/self.world_size # divide by worldsize because we allreduce with sum not average!
-                    dist.all_reduce(aa, dist.ReduceOp.SUM, async_op = False)
-                    print('RANK {} WORLDSIZE {}. At module {}. ||aa - aa.all_reduced_avg||_2/||(1/2)aa||_2 = {} , ||(1/2)aa - aa.all_reduced_avg||_2/||(1/2)aa||_2 = {}\n'.format(
-                        self.rank, self.world_size, module, torch.norm(aa_local - aa)/torch.norm(aa_local), torch.norm(aa_local/2 - aa)/torch.norm(aa_local/2) ) )
-                    print('RANK {} WORLDSIZE {}. At module {}. AA^T Value after reducing is = {}\n'.format(
-                        self.rank, self.world_size, module,aa))
-                ############ END DEBUG ONLY #########
-                
-                ############ also update the real AA for alter correction ########
-                ## TODO:make this NOT happen when we're doing PURE B-KFAC
-                if not (module in self.Brand_track_update_module_list_a):
-                    update_running_stat(aa, self.m_aa[module], self.stat_decay)
-                
-                ''' TO DO: make it possible to accumulate in incoming A (from AA^T)
-                and only invert when the time comes : i.e. make it work for for TCov < TInv!'''
-                
-                ############ Brand - Update the RSVD of \bar{AA} ##############
-                # if layer is linear do brand update if it's big enough. else, do RSVD - both at correct times
-                
-                if isinstance(module, nn.Linear):
-                    if (module in self.Brand_track_update_module_list_a) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                        ############ BRAND UPDATE ############################
                         batch_size = input[0].data.shape[0] #  c_dim = input[0].data.shape[0]
-                        
                         A = input[0].data / (batch_size + 0)**(0.5)
                         if module.bias is not None:
                             #print('\n Updating AA^T: we have bias in linear layer!')
@@ -204,100 +186,82 @@ class B_KFACOptimizer(optim.Optimizer):
                         self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
                                                                             A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
                                                                             device = torch.device('cuda:{}'.format(self.rank)) )
-                    elif (module not in self.Brand_track_update_module_list_a) and self.steps % self.TInv == 0:
-                        # we treat the linear but too small modules the same as conv modules
-                        oversampled_rank = min(self.size_of_nonlazy_Kfactors_a[module], self.total_rsvd_rank)
-                        actual_rank = min(self.size_of_nonlazy_Kfactors_a[module], self.rsvd_rank)
-                        self.d_a[module], self.Q_a[module] = RSVD_lowrank(M = self.m_aa[module], oversampled_rank = oversampled_rank, target_rank = actual_rank, niter = self.rsvd_niter, start_matrix = None)
-                        # Ensure tensor Q_a is contiguous s.t. the allreduce can work! the tensor becoming noncontiguous can be due to transposition and it occurs in practice
-                        #self.Q_a[module] = self.Q_a[module].contiguous()
-                else: # Conv (not linear) modules are dealt with in the _update_inv method only
-                   pass
-                ####### END : Brand - Update the RSVD of \bar{AA} ############## 
-                
-                ############ DEBUG ONLY #############
-                if self.dist_communication_2nd_version_debugger and (self.steps % self.TCov == 0):
-                    print('RANK {} WORLDSIZE {}. At module {}. FINISHED doing updatestats\n at step {}\n'.format(self.rank, self.world_size, module, self.steps))
-                ############ END DEBUG ONLY #########
-            else:  #this part is done only at the init (once per module) to get us the correct dimensions we need to use later
-                # the approach can be improved to get the size w/o computing the matrix, which is faster
-                # but not a big deal: done only once
-                if self.steps == 0: # if not on the list of Kfactors to deal with, and at step zero, init quantities
-                    aa = self.CovAHandler(input[0].data, module)
-                    # save the size
-                    self.size_of_missing_m_aa[module] = aa.size(0)
-                    # initialize required EVD quantities correctly as zero 
-                    #(could do this in the inversion funciton but it's best done here to avoid using torch.zeros)
-                    if isinstance(module, nn.Linear):
-                        extra_rank_target = batch_size = input[0].data.shape[0]
-                        if aa.shape[0] > self.rsvd_rank + extra_rank_target:
-                            actual_rank = self.rsvd_rank + extra_rank_target
-                            self.Brand_track_update_module_list_a.append(module)
-                        else:
-                            actual_rank = min(aa.shape[0], self.rsvd_rank)
+                        self.nkfu_dict_a[module] = 1
+                        ########### END BRAND UPDATE #########################
+                    else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
+                        actual_rank = self.rsvd_rank + input[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
+                        # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
+                            
+                elif module in self.size_0_of_CaSL_Kfactors_A: # the keys of this dict are all the CaSL layers
+                    # for non LL layers, save m_aa and pass (inversion will happen later)
+                    #strictly speaking this elif could be simple "else" if all works correctly elsewhere (because the 2 sets are a partition of the total set of registered modules), but we use elif to make it explicit
+                    if module in self.initalloc_modules_for_this_rank_A[self.rank]:
+                        self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                        self.nkfu_dict_a[module] = 1
                     else:
                         actual_rank = min(aa.shape[0], self.rsvd_rank)
-                    self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
-                    # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
-                
-                elif isinstance(module, nn.Linear) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
-                    # clear the Linear Layer B-representaiton to zeros to get proper result of allreduce sum
-                    # if it's a linear layer and it's at the time we do the B-update on <<ONE>> of the GPU for afterwards sharing
-                    actual_rank = min(self.d_a[module].shape[0], self.rsvd_rank)
+                        self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
+                        # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
+               
+            elif module in self.LL_modules_for_this_rank_A[self.rank] and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
+                ############ BRAND UPDATE ############################
+                batch_size = input[0].data.shape[0] #  c_dim = input[0].data.shape[0]
+                A = input[0].data / (batch_size + 0)**(0.5)
+                if module.bias is not None:
+                    #print('\n Updating AA^T: we have bias in linear layer!')
+                    A = torch.cat([A, A.new(A.size(0), 1).fill_(1)], 1).T
+
+                self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
+                                                                    A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
+                                                                    device = torch.device('cuda:{}'.format(self.rank)) )
+                self.nkfu_dict_a[module] += 1
+                ########### END BRAND UPDATE #########################
+            elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
+                # if the module is the responsibility of *this GPU, AND the module is NOT on Brand-track
+                #### update m_aa###############################################
+                aa = self.CovAHandler(input[0].data, module)
+                update_running_stat(aa, self.m_aa[module], self.stat_decay)
+                self.nkfu_dict_a[module] += 1
+            else: 
+                # if the module is NOT the responsibility of *this GPU AT ALL!
+                if module in self.size_0_of_LL_Kfactors_A and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
+                    # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
+                    # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                     self.d_a[module] = 0 * self.d_a[module]; self.Q_a[module] = 0 * self.Q_a[module]
-                    # the conv modules are reset at _update_inv (and also the Linear modules at "R" update time)
-                    
+                else: #elif module not in self.size_0_of_LL_Kfactors_A:
+                    pass # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
+            #########################################################
 
     def _save_grad_output(self, module, grad_input, grad_output):
         # Accumulate statistics for Fisher matrices
         if self.acc_stats and self.steps % self.TCov == 0:
-            if module in self.modules_for_this_rank[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
-                #is responsible for this aprticular module
-                if self.K_fac_incoming_info_debugger_mode or self.dist_debugger_testing_leanness_thing:
-                    print('RANK {} WORLDSIZE {}. At module {} \n ... the G size is {}\n'.format(self.rank, self.world_size, module, grad_output[0].data.shape))
-                if self.debug_size_for_B:
-                    gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
-                    print('\n\n at gg Kfactor module {}: COMPARING gg.shape[0] = {} to grad_output[0].data.shape[1] = {} '.format(module, gg.shape[0], grad_output[0].data.shape[1]))
+            if self.steps == 0:
+                # at the 0th step, we don;t know yet which layers are LL and which are otherwise
+                # so we have to treat this case sepparately: 1. we perform "trivial allocation" across modules rather than KFACTORS
+                # then 2. if we wisht o stick to the trivial allocation, we merely split this trivial allocation dict into the 2
+                # dictionaries self.LL_modules_for_this_rank_A and self.CaSL_modules_for_this_rank_A at the very end of step 0
+                # otherwise, we recompute "efficient" realllocations at the end of step 0
+                # both these approaches in 2 require us to know which layer is LL and whic isn;t, and the latter requires the size of the layer, which we get at self.steps ==0, and that's why we treat it sepparately
+                gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
                 
-                if self.steps ==0: # compute gg only for appropriate layers (non-brand ones), but for all at beginning to get dimensions
-                    gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
-                    self.size_of_nonlazy_Kfactors_g[module] = gg.shape[0]
-                elif not (module in self.Brand_track_update_module_list_g): # only ask this if when we're ot on the 0th step, so after list is filled
-                    gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
-                # Initialize buffers
-                if self.steps == 0:
-                    if isinstance(module, nn.Linear) and (self.brand_r_target + grad_output[0].data.shape[0] < gg.shape[0]) : 
-                        # only for linear layers which are IN THE LIST OF work
-                        # we need to initialize Q and d! for conv layers in the work list we'll get them auto from RSVD, and for non-work we'll get them init to zero accordingly
-                        #self.d_g[module] = 0 * gg[0,:1] # initialize with a rank-1 null tensor for minila computational effort!
-                        #self.Q_g[module] = 0 * gg[:,:1] + 1
-                        self.d_g[module] = 0 * gg[0,:self.brand_r_target] # initialize with a rank-brand_target_rank null tensor for minila computational effort!
-                        self.Q_g[module] = 0 * gg[:,:self.brand_r_target] # can't do a mere rank 1 as that would give wrong size at communication
+                #### see whether the module is LL or not, and save the size to the corresponding dicitonary  ###########
+                # we save sizes for ALL modules, not just for the ones allocated to *this GPU
+                # note that by saving the size in the correct dictionary we also implicitly sve info about whether one layer is LL or is CaSL
+                if isinstance(module, nn.Linear) and (self.brand_r_target + grad_output[0].data.shape[0] < gg.shape[0]):
+                    self.size_0_of_LL_Kfactors_G[module] = gg.shape[0] 
+                else:
+                    self.size_0_of_CaSL_Kfactors_G[module] = gg.shape[0] 
+                ##### end: save module size to the correct dictioanry depending on whether "is LL" or not ##############
+                    
+                if module in self.size_0_of_LL_Kfactors_G: 
+                    if module in self.initalloc_modules_for_this_rank_G[self.rank]: # for LL layers alloc to *this GPU, perform B update
+                        # initialize for brand-update first
+                        self.d_g[module] = 0 * gg[0, :self.brand_r_target] # initialize with a rank-brand_target_rank null tensor for minila computational effort!
+                        self.Q_g[module] = 0 * gg[:, :self.brand_r_target] # can't do a mere rank 1 as that would give wrong size at communication
                         self.Q_g[module][range(0, self.brand_r_target), range(0, self.brand_r_target)] = 1
-                        
-                        self.Brand_track_update_module_list_g.append(module) # remember the module in the list of Brand-active modules
-                        # in the if above we also have the 2nd condition to ensure we don't do BRAN update when RSVD update is cheaper due to too small size (Essentially)
-                    else: # initialize non-linear layers Kfactors with 0: the identity init is sent to the reg term 
-                        #(decay with iter accounted for)! We also avoid doing an RSVD on self.steps == 0 as this is useless!
-                        # we'll pass the zero tensors 
-                        self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(0))
-                        
-                # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                
-                ############ also update the real AA for alter correction ########
-                if not (module in self.Brand_track_update_module_list_g):
-                    update_running_stat(gg, self.m_gg[module], self.stat_decay)
-                
-                ''' TO DO: make it possible to accumulate in incoming A (from AA^T)
-                and only invert when the time comes : i.e. make it work for for TCov < TInv!'''
-                
-                ############ Brand - Update the RSVD of \bar{GG} ##############
-                # if layer is linear do brand update if it's big enough. else, do RSVD - both at correct times
-                if isinstance(module, nn.Linear):
-                    # If the layer is linear! and it's time to do the update
-                    # g: batch_size * out_dim
-                    #print('Updating GG^T')
-                    if (module in self.Brand_track_update_module_list_g) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                        ############ BRAND UPDATE ############################
                         batch_size =  grad_output[0].data.shape[0] # c_dim =batch_size
                         if self.batch_averaged:
                             G = grad_output[0].data.T * (batch_size + 0.0)**0.5
@@ -307,44 +271,54 @@ class B_KFACOptimizer(optim.Optimizer):
                         self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
                                                                             A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
                                                                             device = torch.device('cuda:{}'.format(self.rank)) )
-                    elif (module not in self.Brand_track_update_module_list_g) and self.steps % self.TInv == 0:
-                        # we treat the linear but too small modules the same as conv modules
-                        oversampled_rank = min(self.size_of_nonlazy_Kfactors_g[module], self.total_rsvd_rank)
-                        actual_rank = min(self.size_of_nonlazy_Kfactors_g[module], self.rsvd_rank)
-                        self.d_g[module], self.Q_g[module] = RSVD_lowrank(M = self.m_gg[module], oversampled_rank = oversampled_rank, 
-                                                                          target_rank = actual_rank, niter = self.rsvd_niter, 
-                                                                          start_matrix = None)
-                        # Ensure tensor Q_a is contiguous s.t. the allreduce can work! the tensor becoming noncontiguous can be due to transposition and it occurs in practice
-                        #self.Q_g[module] = self.Q_g[module].contiguous()
-                else: # Conv (not linear) modules are dealt with in the _update_inv method only
-                    pass
-            
-            else: # this part is done only at the init (once per module) to get us the correct dimensions we need to use later
-                if self.steps == 0:
-                    gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
-                    # save the size
-                    self.size_of_missing_m_gg[module] = gg.size(0)
-                    # initialize required EVD quantities correctly as zero 
-                    #(could do this in the inversion funciton but it's best done here to avoid using torch.zeros)
-                    if isinstance(module, nn.Linear):
-                        extra_rank_target = self.batch_size = grad_output[0].data.shape[0]
-                        if gg.shape[0] > self.rsvd_rank + extra_rank_target:
-                            actual_rank = self.rsvd_rank + extra_rank_target
-                            self.Brand_track_update_module_list_g.append(module)
-                        else:
-                            actual_rank = min(gg.shape[0], self.rsvd_rank)
+                        self.nkfu_dict_g[module] = 1
+                        ########### END BRAND UPDATE #########################
+                    else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
+                        actual_rank = self.rsvd_rank + grad_output[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
+                        # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
+                            
+                elif module in self.size_0_of_CaSL_Kfactors_G: # for non LL layers, save m_gg and pass (inversion will happen later)
+                    #strictly speaking this elif could be simple "else" if all works correctly elsewhere (because the 2 sets are a partition of the total set of registered modules), but we use elif to make it explicit
+                    if module in self.initalloc_modules_for_this_rank_G[self.rank]:
+                        self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                        self.nkfu_dict_g[module] = 1
                     else:
                         actual_rank = min(gg.shape[0], self.rsvd_rank)
-                    self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_g's as skinnytall because
-                    # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
-                elif isinstance(module, nn.Linear) and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
-                    # clear the Linear Layer B-representaiton to zeros to get proper result of allreduce sum
-                    # if it's a linear layer and it's at the time we do the B-update on <<ONE>> of the GPU for afterwards sharing
-                    actual_rank = min(self.d_g[module].shape[0], self.rsvd_rank)
+                        self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
+                        # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
+               
+            elif module in self.LL_modules_for_this_rank_G[self.rank] and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
+                ############ BRAND UPDATE ############################
+                batch_size =  grad_output[0].data.shape[0] # c_dim =batch_size
+                if self.batch_averaged:
+                    G = grad_output[0].data.T * (batch_size + 0.0)**0.5
+                else:
+                    G = grad_output[0].data.T / (batch_size + 0.0)**0.5
+            
+                self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
+                                                                    A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
+                                                                    device = torch.device('cuda:{}'.format(self.rank)) )
+                self.nkfu_dict_g[module] += 1
+                ########### END BRAND UPDATE #########################
+            elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
+                # if the module is the responsibility of *this GPU, AND the module is NOT on Brand-track
+                #### update m_gg ###############################################
+                gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
+                update_running_stat(gg, self.m_gg[module], self.stat_decay)
+                self.nkfu_dict_g[module] += 1
+            else: 
+                # if the module is NOT the responsibility of *this GPU AT ALL!
+                if module in self.size_0_of_LL_Kfactors_G and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
+                    # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
+                    # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                     self.d_g[module] = 0 * self.d_g[module]; self.Q_g[module] = 0 * self.Q_g[module]
-                    # the conv modules are reset at _update_inv (and also the Linear modules at "R" update time)
-                    
-
+                else: #elif module not in self.size_0_of_LL_Kfactors_A:
+                    pass # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
+            #########################################################
+            ##########################################################
+            
     def _prepare_model(self):
         count = 0
         print(self.model)
@@ -359,48 +333,72 @@ class B_KFACOptimizer(optim.Optimizer):
                 print('(%s): %s' % (count, module))
                 count += 1
         
+        ### WORK ALLOCATION temporary (for self.steps ==0 only)... or not! depending on choice
+        # IMPORTANT: USING THE TRIVIAL ALLOCATION MECHANISM ON THE 1st FACTOR COMPUTATION
+        # HTIS IS BECAUSE WE CAN'T ACCESS DIMENSIONS UNLESS A PASS HAS BEEN DONE: can't access layer params if net is "black-box" (not defined by us)
+        # THUS, we first do a trivial number-of layers based allocation (i.e. assuming they're all the same) 
+        # and after that, IF SELECTED SO THROUGH HYPERPARAM work_alloc_propto_RSVD_cost, we'll swtich to a more efficient one, once a pass has been done
         # construct self.modules_for_this_rank (a dictonary of lists] - which tells us which modules's EVD  are computed by which GPU
-        self.modules_for_this_rank = fct_split_list_of_modules(self.modules, self.world_size)
+        self.initalloc_modules_for_this_rank_A = self.initalloc_modules_for_this_rank_G = fct_split_list_of_modules(self.modules, self.world_size)
+        # call the same fct for A and G to get the same TRIVIAL split in both A and G: that boils down to being a module-split rather than a KFACTOR split
         # returns a dictionary of lists!
+        print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+        print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
 
     def _update_inv(self, m):
         """Do eigen decomposition for computing inverse of the ~ fisher.
         :param m: The layer
         :return: no returns.
         """
-        if m in self.modules_for_this_rank[self.rank]:
-            ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" layers
+        # we now can have a GPU doing only the A or only the G KFACTOR of a layer/module
+         ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" KFACTORS
+        # ================ AA^T KFACTORS ===================================
+        if m in self.CaSL_modules_for_this_rank_A[self.rank]:
             """Do eigen decomposition for computing inverse of the ~ fisher.
             :param m: The layer
             :return: no returns.
             """
             eps = 1e-10  # for numerical stability
-            #self.d_a[m], self.Q_a[m] = torch.symeig( self.m_aa[m] + 0.01* torch.eye(self.m_aa[m].shape[0], device = torch.device('cuda:0'))  , eigenvectors=True)
             oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
             actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
-            self.d_a[m], self.Q_a[m] = RSVD_lowrank(M = self.m_aa[m], oversampled_rank = oversampled_rank, target_rank = actual_rank, niter = self.rsvd_niter, start_matrix = None)
-        
-            #self.d_g[m], self.Q_g[m] = torch.symeig( self.m_gg[m] , eigenvectors=True) # computes the eigen decomposition of bar_A and G matrices
-            oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
-            actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
-            self.d_g[m], self.Q_g[m] = RSVD_lowrank(M = self.m_gg[m], oversampled_rank = oversampled_rank, target_rank = actual_rank, niter = self.rsvd_niter, start_matrix = None)
-    
-            self.d_a[m].mul_((self.d_a[m] > eps).float())
-            self.d_g[m].mul_((self.d_g[m] > eps).float())
+            self.U_aa[m], self.D_aa[m], self.V_aa[m] = torch.svd_lowrank(self.m_aa[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
+            self.Q_a[m] = self.V_aa[m][:,:actual_rank] + 0.0 # 0.5*(self.U_aa[m][:,:actual_rank] + self.V_aa[m][:,:actual_rank]); 
+            del self.U_aa[m]; del self.V_aa[m]
+            self.d_a[m] = self.D_aa[m][:actual_rank]; # self.d_a[m][ self.d_a[m] < self.damping] = self.damping
             
+            self.d_a[m].mul_((self.d_a[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
-            #self.Q_a[m] = self.Q_a[m].contiguous()
-            #self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
+            self.Q_a[m] = self.Q_a[m].contiguous()
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
-                print('The shapes are Q_a.shape = {}, d_a.shape = {}, Q_q.shape = {}, d_g.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape, self.Q_g[m].shape,self.d_g[m].shape))
+                print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
             self.d_a[m] = 0 * self.d_a[m];  self.Q_a[m] = 0 * self.Q_a[m]
+        # ====  END  ======== AA^T KFACTORS ===================================
+        
+        # ================ GG^T KFACTORS ===================================
+        if m in self.CaSL_modules_for_this_rank_G[self.rank]:
+            eps = 1e-10  # for numerical stability
+            oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
+            actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
+            self.U_gg[m], self.D_gg[m], self.V_gg[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M=None) # this is rsvd
+            self.Q_g[m] = self.V_gg[m][:,:actual_rank] + 0.0 # 0.5 * ( self.U_gg[m][:,:actual_rank] + self.V_gg[m][:,:actual_rank]);
+            del self.U_gg[m]; del self.V_gg[m]
+            self.d_g[m] = self.D_gg[m][ : actual_rank ]; # d_g[m][ d_g[m] < self.damping ] = self.damping
+    
+            self.d_g[m].mul_((self.d_g[m] > eps).float())
+            #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
+            self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
+            if self.dist_comm_for_layers_debugger:
+                print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
+                print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
+        else:
+            ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
+            #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
             self.d_g[m] = 0 * self.d_g[m];  self.Q_g[m] = 0 * self.Q_g[m]
-            # zeroing out is not enough over-all (but al we do in this function)
-            # we also need to exctact a "subset" matrix of each matrix before doing the communication!
+        # ====== END ======= GG^T KFACTORS ===================================
         
     @staticmethod
     def _get_matrix_form_grad(m, classname):
@@ -426,14 +424,8 @@ class B_KFACOptimizer(optim.Optimizer):
         # p_grad_mat is of output_dim * input_dim
         ######
         ###### get nkfu #################
-        if m in self.Brand_track_update_module_list_a:
-            nkfu_a = math.floor(self.steps / (self.TCov * self.brand_update_multiplier_to_TCov))
-        else:
-            nkfu_a = math.floor(self.TInv * math.floor(self.steps / self.TInv) / self.TCov)
-        if m in self.Brand_track_update_module_list_g:
-            nkfu_g = math.floor(self.steps / (self.TCov * self.brand_update_multiplier_to_TCov))
-        else:
-            nkfu_g = math.floor(self.TInv * math.floor(self.steps / self.TInv) / self.TCov)
+        nkfu_a = self.nkfu_dict_a[m]
+        nkfu_g = self.nkfu_dict_g[m]
         ###### END: get nkfu ############
         v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, 
                                                n_kfactor_update = nkfu_g, rho = self.stat_decay, damping_type = self.damping_type) # the damping here is adaptive!
@@ -585,7 +577,37 @@ class B_KFACOptimizer(optim.Optimizer):
             v = self._get_natural_grad(m, p_grad_mat, damping)
             updates[m] = v
         self._kl_clip_and_update_grad(updates, lr)
-
+        
+        #### 1. Change work allocation or 2. rearrange variables maintaining the same wokr alloation (2 is there to simply integrate the case of choosing trivial alloc vs efficient allocation)
+        #### change work allocation to dimension-based for RSVD
+        if self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == True:
+            raise NotImplementedError('self.work_alloc_propto_RSVD_cost == True case not implemented yet! Coming in next commit or so!')
+        elif self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == False:
+            ## if we don't want to reallocate in an efficient way, we still need to split each allocated list we have into 1 for LL and 1 for CaSL
+            ### 1. construct self.LL_modules_for_this_rank_A and self.CaSL_modules_for_this_rank_A dictionaries
+            for key_rank in self.initalloc_modules_for_this_rank_A:
+                self.LL_modules_for_this_rank_A[key_rank] = []
+                self.CaSL_modules_for_this_rank_A[key_rank] = []
+                for module_allocated in self.initalloc_modules_for_this_rank_A[key_rank]:
+                    if module_allocated in self.size_0_of_LL_Kfactors_A: # the keys of this dict are all the LL layers
+                        #if it's LL, allocate to the same rank, but put in the correct dictionary
+                        self.LL_modules_for_this_rank_A[key_rank].append(module_allocated)
+                    elif module_allocated in self.size_0_of_CaSL_Kfactors_A: # the keys of this dict are all the CaSL layers
+                        #if it's CaSL, allocate to the same rank, but put in the correct dictionary
+                        self.CaSL_modules_for_this_rank_A[key_rank].append(module_allocated)
+                        
+            ### 2. construct self.LL_modules_for_this_rank_G and self.CaSL_modules_for_this_rank_G dictionaries
+            for key_rank in self.initalloc_modules_for_this_rank_G:
+                self.LL_modules_for_this_rank_G[key_rank] = []
+                self.CaSL_modules_for_this_rank_G[key_rank] = []
+                for module_allocated in self.initalloc_modules_for_this_rank_G[key_rank]:
+                    if module_allocated in self.size_0_of_LL_Kfactors_G: # the keys of this dict are all the LL layers
+                        #if it's LL, allocate to the same rank, but put in the correct dictionary
+                        self.LL_modules_for_this_rank_G[key_rank].append(module_allocated)
+                    elif module_allocated in self.size_0_of_CaSL_Kfactors_G: # the keys of this dict are all the CaSL layers
+                        #if it's CaSL, allocate to the same rank, but put in the correct dictionary
+                        self.CaSL_modules_for_this_rank_G[key_rank].append(module_allocated)
+        
         self._step(closure)
         self.steps += 1
 

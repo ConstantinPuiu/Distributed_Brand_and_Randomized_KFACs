@@ -134,6 +134,9 @@ def main(world_size, args):
     brand_r_target_excess = args.brand_r_target_excess
     brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
     # ====================================================
+    
+    ### added for efficient work allocation
+    work_alloc_propto_RSVD_and_B_cost = args.work_alloc_propto_RSVD_and_B_cost
     # ====================================================
     
     ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
@@ -179,7 +182,8 @@ def main(world_size, args):
                                 damping_type = damping_type, #'adaptive',
                                 clip_type = clip_type,
                                 brand_r_target_excess = brand_r_target_excess,
-                                brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov)#    optim.SGD(model.parameters(),
+                                brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
+                                work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -255,6 +259,9 @@ def parse_args():
     parser.add_argument('--brand_update_multiplier_to_TCov', type=int, default=1, help='The factor by which the B-update frequency is LOWER than the frequency at which we reiceve new K-factor information' )
     # ====================================================
       
+    ### added to deal with more efficient wokr allocaiton
+    #
+    parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=bool, default=False, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set True if yes' ) 
     args = parser.parse_args()
     return args
 
