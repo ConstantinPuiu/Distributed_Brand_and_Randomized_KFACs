@@ -351,8 +351,18 @@ class B_KFACOptimizer(optim.Optimizer):
         """
         # we now can have a GPU doing only the A or only the G KFACTOR of a layer/module
          ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" KFACTORS
+        ##### choose which list to loo into #############################
+        # this operation is required because self.CaSL_modules_for_this_rank_A // G is not defined at self.steps ==0
+        if self.steps == 0:
+            list_to_check_in_A = self.initalloc_modules_for_this_rank_A[self.rank]
+            list_to_check_in_G = self.initalloc_modules_for_this_rank_G[self.rank]
+        else:
+            list_to_check_in_A = self.CaSL_modules_for_this_rank_A[self.rank]
+            list_to_check_in_G = self.CaSL_modules_for_this_rank_G[self.rank]
+        ##### end choose hich list to look into #############################
+            
         # ================ AA^T KFACTORS ===================================
-        if m in self.CaSL_modules_for_this_rank_A[self.rank]:
+        if m in list_to_check_in_A:
             """Do eigen decomposition for computing inverse of the ~ fisher.
             :param m: The layer
             :return: no returns.
@@ -378,7 +388,7 @@ class B_KFACOptimizer(optim.Optimizer):
         # ====  END  ======== AA^T KFACTORS ===================================
         
         # ================ GG^T KFACTORS ===================================
-        if m in self.CaSL_modules_for_this_rank_G[self.rank]:
+        if m in list_to_check_in_G:
             eps = 1e-10  # for numerical stability
             oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
             actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
