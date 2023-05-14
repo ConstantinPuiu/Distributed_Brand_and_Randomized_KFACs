@@ -366,7 +366,7 @@ class B_KFACOptimizer(optim.Optimizer):
         ##### end choose hich list to look into #############################
             
         # ================ AA^T KFACTORS ===================================
-        if m in list_to_check_in_A:
+        if (m in list_to_check_in_A) and (m in self.size_0_of_CaSL_Kfactors_A):
             """Do eigen decomposition for computing inverse of the ~ fisher.
             :param m: The layer
             :return: no returns.
@@ -385,14 +385,14 @@ class B_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
-        else:
+        elif m in self.size_0_of_CaSL_Kfactors_A: # the keys of this dictionary are all the CASL modules
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
             self.d_a[m] = 0 * self.d_a[m];  self.Q_a[m] = 0 * self.Q_a[m]
         # ====  END  ======== AA^T KFACTORS ===================================
         
         # ================ GG^T KFACTORS ===================================
-        if m in list_to_check_in_G:
+        if (m in list_to_check_in_G) and (m in self.size_0_of_CaSL_Kfactors_G):
             eps = 1e-10  # for numerical stability
             oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
             actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
@@ -407,7 +407,7 @@ class B_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
-        else:
+        elif m in self.size_0_of_CaSL_Kfactors_G:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
             self.d_g[m] = 0 * self.d_g[m];  self.Q_g[m] = 0 * self.Q_g[m]
@@ -541,12 +541,12 @@ class B_KFACOptimizer(optim.Optimizer):
         ## 1) if it's time to recompute EVD, recompute EVD (set zeros to parts where I don't recompute for a given rank)
         if self.steps % self.TInv == 0:
             for m in self.modules:
-                if isinstance(m, nn.Linear): # if the layer at hand is linear, 
-                    pass # we never do an RSVD (R-update), only ever do B_updates for LARGE enough linear layers!
-                    # for smaller linear layers we do RSVD and never brand (as they go on the brand track) - but it is simpler to
-                    # perform this RSVD operation at the B-update phase, as there we have per- AA vs GG individual control while here the control is bundled AA and GG so harder to segment on ifs over this
-                else: # if it's not a linear layer, do RSVD every TInv iterations (No brand update for Conv Layers)
-                    self._update_inv(m)
+                #if isinstance(m, nn.Linear): # if the layer at hand is linear, 
+                #pass # we never do an RSVD (R-update), only ever do B_updates for LARGE enough linear layers!
+                # for smaller linear layers we do RSVD and never brand (as they go on the brand track) - but it is simpler to
+                # perform this RSVD operation at the B-update phase, as there we have per- AA vs GG individual control while here the control is bundled AA and GG so harder to segment on ifs over this
+                #else: # if it's not a linear layer, do RSVD every TInv iterations (No brand update for Conv Layers)
+                self._update_inv(m)
                     
                 
         
