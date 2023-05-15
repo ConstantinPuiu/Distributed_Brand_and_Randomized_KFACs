@@ -617,12 +617,12 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                                     target_rank_RSVD = self.rsvd_rank)
             #### 1. delete m_aa and m_gg in OLD but NOT in new
             for key_A_old in self.initalloc_modules_for_this_rank_A[self.rank]:
-                if key_A_old not in self.CaSL_modules_for_this_rank_A[self.rank]:
+                if (key_A_old not in self.CaSL_modules_for_this_rank_A[self.rank]) and (key_A_old in self.size_0_of_CaSL_Kfactors_A):
                     # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
                     # self.d_a[key_A_old] = 0 * self.d_a[key_A_old]; self.Q_a[key_A_old] = 0 * self.Q_a[key_A_old]
                     del self.m_aa[key_A_old]
             for key_G_old in self.initalloc_modules_for_this_rank_G[self.rank]:
-                if key_G_old not in self.CaSL_modules_for_this_rank_G[self.rank]:
+                if (key_G_old not in self.CaSL_modules_for_this_rank_G[self.rank]) and (key_G_old in self.size_0_of_CaSL_Kfactors_G):
                     # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
                     # self.d_g[key_G_old] = 0 * self.d_g[key_G_old]; self.Q_g[key_G_old] = 0 * self.Q_g[key_G_old]
                     del self.m_gg[key_G_old]
