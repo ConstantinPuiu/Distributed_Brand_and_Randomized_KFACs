@@ -669,7 +669,7 @@ class B_KFACOptimizer(optim.Optimizer):
                         #if it's CaSL, allocate to the same rank, but put in the correct dictionary
                         self.CaSL_modules_for_this_rank_G[key_rank].append(module_allocated)
         end_reschedule_time = time.time()
-        if self.debugger_rescheduler_timing == True:
+        if self.debugger_rescheduler_timing == True and self.steps == 0:
             print('RANK {} Took {} s to reschedule and self.work_alloc_propto_RSVD_and_B_cost == {}'.format(self.rank, end_reschedule_time - start_reschedule_time , self.work_alloc_propto_RSVD_and_B_cost))
         self._step(closure)
         self.steps += 1

@@ -136,7 +136,10 @@ def main(world_size, args):
     # ====================================================
     
     ### added for efficient work allocation
-    work_alloc_propto_RSVD_and_B_cost = args.work_alloc_propto_RSVD_and_B_cost
+    if args.work_alloc_propto_RSVD_and_B_cost == 0:
+        work_alloc_propto_RSVD_and_B_cost = False
+    else:
+        work_alloc_propto_RSVD_and_B_cost = True
     # ====================================================
     
     ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
@@ -261,7 +264,7 @@ def parse_args():
       
     ### added to deal with more efficient wokr allocaiton
     #
-    parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=bool, default=True, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set True if yes' ) 
+    parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=int, default=1, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set to any nonzero if yes. we use int rather than bool as argparse works badly with bool!' ) 
     args = parser.parse_args()
     return args
 
