@@ -219,10 +219,18 @@ class B_KFACOptimizer(optim.Optimizer):
                     ########### END BRAND UPDATE #########################
             elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
                 # if the module is the responsibility of *this GPU, AND the module is NOT on Brand-track
-                #### update m_aa###############################################
                 aa = self.CovAHandler(input[0].data, module)
-                update_running_stat(aa, self.m_aa[module], self.stat_decay)
-                self.nkfu_dict_a[module] += 1
+                #### update m_aa###############################################
+                if self.steps == self.TCov and (module not in self.initalloc_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
+                    #the first time we enter here after the efficient allocation is at step number self.TCov 
+                    # strinctly speaing we don't need the condition self.work_alloc_propto_RSVD_and_B_cost == True since module not in self.initalloc_modules_for_this_rank_A[self.rank] cannot hold if self.initialloc... == False
+                    self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                    self.nkfu_dict_a[module] = 1
+                    # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
+                    # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
+                else:
+                    update_running_stat(aa, self.m_aa[module], self.stat_decay)
+                    self.nkfu_dict_a[module] += 1
             else: 
                 # if the module is NOT the responsibility of *this GPU AT ALL!
                 if module in self.size_0_of_LL_Kfactors_A:
@@ -303,11 +311,19 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                         device = torch.device('cuda:{}'.format(self.rank)) )
                     self.nkfu_dict_g[module] += 1
                     ########### END BRAND UPDATE #########################
-            elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
+            elif module in self.CaSL_modules_for_this_rank_G[self.rank]:
                 # if the module is the responsibility of *this GPU, AND the module is NOT on Brand-track
                 #### update m_gg ###############################################
                 gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
-                update_running_stat(gg, self.m_gg[module], self.stat_decay)
+                if self.steps == self.TCov and (module not in self.initalloc_modules_for_this_rank_G[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
+                    #the first time we enter here after the efficient allocation is at step number self.TCov 
+                    # strinctly speaing we don't need the condition self.work_alloc_propto_RSVD_and_B_cost == True since module not in self.initalloc_modules_for_this_rank_A[self.rank] cannot hold if self.initialloc... == False
+                    self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                    self.nkfu_dict_g[module] = 1
+                    # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
+                    # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
+                else:
+                    update_running_stat(gg, self.m_gg[module], self.stat_decay)
                 self.nkfu_dict_g[module] += 1
             else: 
                 # if the module is NOT the responsibility of *this GPU AT ALL!
@@ -594,7 +610,36 @@ class B_KFACOptimizer(optim.Optimizer):
         #### 1. Change work allocation or 2. rearrange variables maintaining the same wokr alloation (2 is there to simply integrate the case of choosing trivial alloc vs efficient allocation)
         #### change work allocation to dimension-based for RSVD
         if self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == True:
-            raise NotImplementedError('self.work_alloc_propto_RSVD_and_B_cost == True case not implemented yet! Coming in next commit or so!')
+            ############## Reallocate RSVD work (CaSL layers) ############################
+            self.CaSL_modules_for_this_rank_A, self.CaSL_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_CaSL_Kfactors_A,
+                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_CaSL_Kfactors_G,
+                                                                                    target_rank_RSVD = self.rsvd_rank)
+            #### 1. delete m_aa and m_gg in OLD but NOT in new
+            for key_A_old in self.initalloc_modules_for_this_rank_A[self.rank]:
+                if key_A_old not in self.CaSL_modules_for_this_rank_A[self.rank]:
+                    # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
+                    # self.d_a[key_A_old] = 0 * self.d_a[key_A_old]; self.Q_a[key_A_old] = 0 * self.Q_a[key_A_old]
+                    del self.m_aa[key_A_old]
+            for key_G_old in self.initalloc_modules_for_this_rank_G[self.rank]:
+                if key_G_old not in self.CaSL_modules_for_this_rank_G[self.rank]:
+                    # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
+                    # self.d_g[key_G_old] = 0 * self.d_g[key_G_old]; self.Q_g[key_G_old] = 0 * self.Q_g[key_G_old]
+                    del self.m_gg[key_G_old]
+            # Qs and ds will be correctly set to zero without doing manually so here
+            
+            ############ END REALLOCATED RSVD WORK (CASL LAYERS) #########################
+                    
+            ############## Reallocate B-update work (CaSL layers) ############################
+            self.LL_modules_for_this_rank_A, self.LL_modules_for_this_rank_G = allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers = self.world_size, 
+                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_LL_Kfactors_A,
+                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_LL_Kfactors_G,
+                                                                                    target_rank_RSVD = self.rsvd_rank,
+                                                                                    batch_size = self.batch_size)
+            ### Qs and Ds will be automatically set to zero (for appropriate all_reduce) at the correect time, so we don't have to do this again
+            ############ END REALLOCATE B-update WORK (CASL LAYERS) #########################
+            
+                    
         elif self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == False:
             ## if we don't want to reallocate in an efficient way, we still need to split each allocated list we have into 1 for LL and 1 for CaSL
             ### 1. construct self.LL_modules_for_this_rank_A and self.CaSL_modules_for_this_rank_A dictionaries

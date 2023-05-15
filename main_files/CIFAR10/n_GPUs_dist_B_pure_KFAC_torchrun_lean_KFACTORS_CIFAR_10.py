@@ -261,7 +261,7 @@ def parse_args():
       
     ### added to deal with more efficient wokr allocaiton
     #
-    parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=bool, default=False, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set True if yes' ) 
+    parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=bool, default=True, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set True if yes' ) 
     args = parser.parse_args()
     return args
 
