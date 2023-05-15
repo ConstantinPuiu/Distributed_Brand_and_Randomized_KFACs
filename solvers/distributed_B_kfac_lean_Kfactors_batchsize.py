@@ -223,7 +223,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 #### update m_aa###############################################
                 if self.steps == self.TCov and (module not in self.initalloc_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
                     #the first time we enter here after the efficient allocation is at step number self.TCov 
-                    # strinctly speaing we don't need the condition self.work_alloc_propto_RSVD_and_B_cost == True since module not in self.initalloc_modules_for_this_rank_A[self.rank] cannot hold if self.initialloc... == False
+                    # strinctly speaking we don't need the condition self.work_alloc_propto_RSVD_and_B_cost == True since module not in self.initalloc_modules_for_this_rank_A[self.rank] cannot hold if self.initialloc... == False
                     self.m_aa[module] = (1 - self.stat_decay) * aa + 0
                     self.nkfu_dict_a[module] = 1
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
@@ -612,8 +612,8 @@ class B_KFACOptimizer(optim.Optimizer):
         if self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == True:
             ############## Reallocate RSVD work (CaSL layers) ############################
             self.CaSL_modules_for_this_rank_A, self.CaSL_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
-                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_CaSL_Kfactors_A,
-                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_CaSL_Kfactors_G,
+                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_CaSL_Kfactors_G,
+                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_CaSL_Kfactors_A,
                                                                                     target_rank_RSVD = self.rsvd_rank)
             #### 1. delete m_aa and m_gg in OLD but NOT in new
             for key_A_old in self.initalloc_modules_for_this_rank_A[self.rank]:
@@ -632,8 +632,8 @@ class B_KFACOptimizer(optim.Optimizer):
                     
             ############## Reallocate B-update work (CaSL layers) ############################
             self.LL_modules_for_this_rank_A, self.LL_modules_for_this_rank_G = allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers = self.world_size, 
-                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_LL_Kfactors_A,
-                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_LL_Kfactors_G,
+                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_LL_Kfactors_G,
+                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_LL_Kfactors_A,
                                                                                     target_rank_RSVD = self.rsvd_rank,
                                                                                     batch_size = self.batch_size)
             ### Qs and Ds will be automatically set to zero (for appropriate all_reduce) at the correect time, so we don't have to do this again
