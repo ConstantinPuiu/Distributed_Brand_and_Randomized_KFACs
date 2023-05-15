@@ -124,7 +124,10 @@ def main(world_size, args):
     TInv_period = args.TInv_period
     
     ##### wor allocation
-    work_alloc_propto_RSVD_cost = args.work_alloc_propto_RSVD_cost
+    if agrs.work_alloc_propto_RSVD_cost == 0 :
+        work_alloc_propto_RSVD_cost = False
+    else:
+        work_alloc_propto_RSVD_cost = True
     # ====================================================
     # ====================================================
     
@@ -244,7 +247,7 @@ def parse_args():
     
     ### added to deal with more efficient wokr allocaiton
     #
-    parser.add_argument('--work_alloc_propto_RSVD_cost', type=bool, default=True, help='Do we want to allocate work in proportion to actula RSVD cost? set True if yes' ) 
+    parser.add_argument('--work_alloc_propto_RSVD_cost', type=1, default=1, help='Do we want to allocate work in proportion to actula RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly' ) 
     args = parser.parse_args()
     return args
 
