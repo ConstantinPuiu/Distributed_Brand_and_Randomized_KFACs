@@ -1,4 +1,5 @@
 import math
+import time
 
 import torch
 import torch.nn as nn
@@ -96,6 +97,7 @@ class B_KFACOptimizer(optim.Optimizer):
         self.dist_comm_for_layers_debugger = False
         self.dist_debugger_testing_leanness_thing = False
         self.debug_size_for_B = False
+        self.debugger_rescheduler_timing = True
         
         ### R-KFAC specific or introduced with RKFAC for te 1st time
         #rsvd_params
@@ -609,6 +611,7 @@ class B_KFACOptimizer(optim.Optimizer):
         
         #### 1. Change work allocation or 2. rearrange variables maintaining the same wokr alloation (2 is there to simply integrate the case of choosing trivial alloc vs efficient allocation)
         #### change work allocation to dimension-based for RSVD
+        start_reschedule_time = time.time()
         if self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == True:
             ############## Reallocate RSVD work (CaSL layers) ############################
             self.CaSL_modules_for_this_rank_A, self.CaSL_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
@@ -665,7 +668,9 @@ class B_KFACOptimizer(optim.Optimizer):
                     elif module_allocated in self.size_0_of_CaSL_Kfactors_G: # the keys of this dict are all the CaSL layers
                         #if it's CaSL, allocate to the same rank, but put in the correct dictionary
                         self.CaSL_modules_for_this_rank_G[key_rank].append(module_allocated)
-        
+        end_reschedule_time = time.time()
+        if self.debugger_rescheduler_timing == True:
+            print('RANK {} Took {} s to reschedule and self.work_alloc_propto_RSVD_and_B_cost == {}'.format(self.rank, end_reschedule_time - start_reschedule_time , self.work_alloc_propto_RSVD_and_B_cost))
         self._step(closure)
         self.steps += 1
 
