@@ -293,7 +293,7 @@ class R_KFACOptimizer(optim.Optimizer):
             eps = 1e-10  # for numerical stability
             
             #### A: select correct target RSVD rank ################
-            if self.steps == 0 or self.adaptable_rsvd_rank == False:
+            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rank_adaptation_TInv_multiplier):
                 oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
                 actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
             else:
@@ -324,7 +324,7 @@ class R_KFACOptimizer(optim.Optimizer):
             eps = 1e-10  # for numerical stability
             
             #### G: select correct target RSVD rank ################
-            if self.steps == 0 or self.adaptable_rsvd_rank == False:
+            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rank_adaptation_TInv_multiplier):
                 oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
                 actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
             else: 
