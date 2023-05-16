@@ -245,9 +245,9 @@ def parse_args():
     parser.add_argument('--TCov_period', type=int, default=20, help='Period of reupdating Kfactors (not inverses) ' )
     parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTAITONS' )
     
-    ### added to deal with more efficient wokr allocaiton
+    ### added to deal with more efficient work allocaiton
     #
-    parser.add_argument('--work_alloc_propto_RSVD_cost', type=1, default=1, help='Do we want to allocate work in proportion to actula RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--work_alloc_propto_RSVD_cost', type=int, default=1, help='Do we want to allocate work in proportion to actula RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly' ) 
     args = parser.parse_args()
     return args
 
