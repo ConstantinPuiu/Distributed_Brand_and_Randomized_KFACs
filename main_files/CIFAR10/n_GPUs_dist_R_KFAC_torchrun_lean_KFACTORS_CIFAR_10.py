@@ -135,7 +135,8 @@ def main(world_size, args):
     else:
         adaptable_rsvd_rank = True
     rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
-    maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank     
+    maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
+    rsvd_adaptve_max_history = args.rsvd_adaptve_max_history
     # ====================================================
     # ====================================================
     
@@ -184,7 +185,8 @@ def main(world_size, args):
                                 clip_type = clip_type,
                                 adaptable_rsvd_rank = adaptable_rsvd_rank,
                                 rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
-                                maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank )#    optim.SGD(model.parameters(),
+                                maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
+                                rsvd_adaptve_max_history = rsvd_adaptve_max_history)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -264,7 +266,8 @@ def parse_args():
     parser.add_argument('--adaptable_rsvd_rank', type=int, default=1, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
     parser.add_argument('--rsvd_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in rsvd: the ran will adapt to be around this error (but rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank)' ) 
     parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
-    
+    parser.add_argument('--rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
+    parser.add_argument('--rsvd_adaptve_max_history', type = int, defult = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
     args = parser.parse_args()
     return args
 
