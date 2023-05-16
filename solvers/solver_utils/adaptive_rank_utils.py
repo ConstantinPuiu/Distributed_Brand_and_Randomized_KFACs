@@ -1,6 +1,9 @@
 
 
 def get_new_rsvd_rank(list_err, list_ranks, max_rank = 700, target_rel_err = 0.033, type_of_prediction = 'simplistic', TInv_multiplier = 1):
+    ### strictly speaking, it does not matter whether RSVD or B-update is used. Can use the exact same function for B-update
+    
+    
     # the lists correspond in index: the list_err[0] correspinds to the rank list_rank[0] etc
     # TInv_multiplier = self.rank_adaptation_TInv_multiplier  -- tells us how manypast items in the list (at max) are "samples" of the same thing
     if type_of_prediction == 'simplistic':
