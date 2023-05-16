@@ -502,11 +502,11 @@ class R_KFACOptimizer(optim.Optimizer):
                     ####### A & G: append rank and errors #### since done after communication we have global info everywhere ##########
                     if self.steps == 0:
                         ####### A: append rank and errors ######################################
-                        self.all_prev_trunc_errs_a[m] = (self.d_a[m][-1])/(self.d_a[m][0]) # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
-                        self.all_prev_rsvd_used_ranks_a[m] = self.d_a[m].shape[0]
+                        self.all_prev_trunc_errs_a[m] = [ (self.d_a[m][-1])/(self.d_a[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_rsvd_used_ranks_a[m] = [ self.d_a[m].shape[0] ]
                         ####### G: append rank and errors ######################################
-                        self.all_prev_trunc_errs_g[m] = (self.d_g[m][-1])/(self.d_g[m][0]) # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
-                        self.all_prev_rsvd_used_ranks_g[m] = self.d_g[m].shape[0]
+                        self.all_prev_trunc_errs_g[m] = [ (self.d_g[m][-1])/(self.d_g[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_rsvd_used_ranks_g[m] = [ self.d_g[m].shape[0] ]
                     else:
                         ####### A: append rank and errors ######################################
                         self.all_prev_trunc_errs_a[m].append( (self.d_a[m][-1])/(self.d_a[m][0]) )
