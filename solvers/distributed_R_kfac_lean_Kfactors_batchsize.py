@@ -104,10 +104,15 @@ class R_KFACOptimizer(optim.Optimizer):
         # introduced with RKFAC for te 1st time but also relevant to simple KFAC
         self.damping_type = damping_type
         self.clip_type = clip_type
+        
         ## RKFAC specific init
         self.U_aa, self.D_aa, self.V_aa = {}, {}, {}
         self.U_gg, self.D_gg, self.V_gg = {}, {}, {}
         
+        ### for counting number of updates at each K-factor (helps with the interaction of 
+        # (1) Sent init I to reg term; and (2) (re)scheduling <efficienty>)
+        self.nkfu_dict_a = {}
+        self.nkfu_dict_g = {}
         # prepare model, and also allocate work across GPUs
         self._prepare_model()
         
@@ -130,15 +135,18 @@ class R_KFACOptimizer(optim.Optimizer):
                 if self.steps == 0: # Initialize buffers
                     self.m_aa[module] = (1 - self.stat_decay) * aa + 0
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
+                    self.nkfu_dict_a[module] = 1
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
                     #the first time we enter here after the efficient allocation is at step number self.TCov 
                     self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                    self.nkfu_dict_a[module] = 1
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                     # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                 else:
                     update_running_stat(aa, self.m_aa[module], self.stat_decay)
+                    self.nkfu_dict_a[module] += 1
                 
                 ############ DEBUG ONLY #########
                 if self.Dist_communication_debugger:
@@ -183,15 +191,18 @@ class R_KFACOptimizer(optim.Optimizer):
                     # self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
                     self.m_gg[module] = (1 - self.stat_decay) * gg + 0
                     self.size_0_of_all_Kfactors_G[module] = gg.size(0)
+                    self.nkfu_dict_g[module] = 1
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_G): # we could also say "not in self.m_aa[module], but this has less control over the situation
                     #the first time we enter here after the efficient allocation is at step number self.TCov
                     self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                    self.nkfu_dict_g[module] = 1
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                     # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                 else:
                     update_running_stat(gg, self.m_gg[module], self.stat_decay)
+                    self.nkfu_dict_g[module] += 1
                 
             else: # this part is done only at the init (once per module) to get us the correct dimensions we need to use later
                 if self.steps == 0:
@@ -310,10 +321,15 @@ class R_KFACOptimizer(optim.Optimizer):
         :return: a list of gradients w.r.t to the parameters in `m`
         """
         # p_grad_mat is of output_dim * input_dim
-        ######
-        nkfu_g = nkfu_a = math.floor(self.TInv * math.floor(self.steps / self.TInv) / self.TCov)
+        ###### OLD IMPLEMENTATION OF GET nkfu's - not perfectly correct when we (re)allocate work. Commented out:
+        #nkfu_g = nkfu_a = math.floor(self.TInv * math.floor(self.steps / self.TInv) / self.TCov)
         # this is not just math.floor(self.steps / self.TCov) because the inverse gets updated on every TInv iterations,
         # and when it does, th inverse (and thus the inverse application "sees" all the more updates done at frequency TCov - think about it!
+        
+        ###### get nkfu #################
+        nkfu_a = self.nkfu_dict_a[m]
+        nkfu_g = self.nkfu_dict_g[m]
+        ###### END: get nkfu ############
         v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, 
                                                n_kfactor_update = nkfu_g, rho = self.stat_decay, damping_type = self.damping_type)
         v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping, 
@@ -449,12 +465,12 @@ class R_KFACOptimizer(optim.Optimizer):
                     if key_A_old not in new_modules_for_this_rank_A[self.rank]:
                         # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
                         # self.d_a[key_A_old] = 0 * self.d_a[key_A_old]; self.Q_a[key_A_old] = 0 * self.Q_a[key_A_old]
-                        del self.m_aa[key_A_old]
+                        del self.m_aa[key_A_old], self.nkfu_dict_a[key_A_old]
                 for key_G_old in self.modules_for_this_rank_G[self.rank]:
                     if key_G_old not in new_modules_for_this_rank_G[self.rank]:
                         # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
                         # self.d_g[key_G_old] = 0 * self.d_g[key_G_old]; self.Q_g[key_G_old] = 0 * self.Q_g[key_G_old]
-                        del self.m_gg[key_G_old]
+                        del self.m_gg[key_G_old], self.nkfu_dict_g[key_G_old]
                 #### 2. initialize what's in NEW but NOT in old (and thus does nto exist)
                 ## we do this in save_inuput and _save_grad_output hooks
                 ## but in order to do that we need to rememeber the old keys first
