@@ -96,7 +96,8 @@ class R_KFACOptimizer(optim.Optimizer):
         self.dist_communication_2nd_version_debugger = False
         self.dist_comm_for_layers_debugger = False
         self.dist_debugger_testing_leanness_thing = False
-        
+        self.debugger_rsvd_adaptive_rank = True
+
         ### R-KFAC specific or introduced with RKFAC for te 1st time
         #rsvd_params
         self.rsvd_rank = rsvd_rank
