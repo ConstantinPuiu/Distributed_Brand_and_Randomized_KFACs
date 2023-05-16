@@ -123,11 +123,19 @@ def main(world_size, args):
     TCov_period = args.TCov_period
     TInv_period = args.TInv_period
     
-    ##### wor allocation
-    if agrs.work_alloc_propto_RSVD_cost == 0 :
+    ##### work allocation
+    if args.work_alloc_propto_RSVD_cost == 0 :
         work_alloc_propto_RSVD_cost = False
     else:
         work_alloc_propto_RSVD_cost = True
+        
+    ### rsvd adaptive rank ##########
+    if args.adaptable_rsvd_rank == 0:
+        adaptable_rsvd_rank = False
+    else:
+        adaptable_rsvd_rank = True
+    rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
+    maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank     
     # ====================================================
     # ====================================================
     
@@ -173,7 +181,10 @@ def main(world_size, args):
                                 rsvd_niter = rsvd_niter,
                                 work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost,
                                 damping_type = damping_type, #'adaptive',
-                                clip_type = clip_type)#    optim.SGD(model.parameters(),
+                                clip_type = clip_type,
+                                adaptable_rsvd_rank = adaptable_rsvd_rank,
+                                rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
+                                maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank )#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -248,6 +259,12 @@ def parse_args():
     ### added to deal with more efficient work allocaiton
     #
     parser.add_argument('--work_alloc_propto_RSVD_cost', type=int, default=1, help='Do we want to allocate work in proportion to actula RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly' ) 
+    
+    #### added to dal with RSVD adaptable rank
+    parser.add_argument('--adaptable_rsvd_rank', type=int, default=1, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--rsvd_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in rsvd: the ran will adapt to be around this error (but rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank)' ) 
+    parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
+    
     args = parser.parse_args()
     return args
 

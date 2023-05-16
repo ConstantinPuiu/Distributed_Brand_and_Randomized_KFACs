@@ -32,7 +32,11 @@ class R_KFACOptimizer(optim.Optimizer):
                  rsvd_niter = 3,
                  work_alloc_propto_RSVD_cost = True,
                  damping_type = 'adaptive',
-                 clip_type = 'non_standard'):
+                 clip_type = 'non_standard',
+                 # for adaptive rsvd rank
+                 adaptable_rsvd_rank = True,
+                 rsvd_target_truncation_rel_err = 0.033,
+                 maximum_ever_admissible_rsvd_rank = 700 ):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -113,6 +117,21 @@ class R_KFACOptimizer(optim.Optimizer):
         # (1) Sent init I to reg term; and (2) (re)scheduling <efficienty>)
         self.nkfu_dict_a = {}
         self.nkfu_dict_g = {}
+        
+        #### for adaptable rsvd rank
+        # using an adaptable rank will also come with a limit on the maximum usable ank ever, 
+        # otherwise we might just revert to EVD in some cases, and we don't want taht
+        # the aim of adaptable rank is to choose the rank to have the truncation error roughly to our desired threshold, 
+        # but we saccrifice truncation error if we need to keep too many modes
+        self.adaptable_rsvd_rank = adaptable_rsvd_rank
+        self.rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err
+        self.maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank     
+        self.all_prev_trunc_errs_a = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_rsvd_used_ranks_a = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_rsvd_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
+        # for the 2 dictionaries above: deallocated modules will be deleted; newly allocated modules will be added and have FEWER elements
+        
         # prepare model, and also allocate work across GPUs
         self._prepare_model()
         
@@ -270,6 +289,14 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
+            if self.adaptable_rsvd_rank == True: # if we do adaptable rank thing, save the rank and error data/statistics
+                if self.steps == 0:
+                    self.all_prev_trunc_errs_a[m] = (self.d_a[m][-1])/(self.d_a[m][0]) # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                    self.all_prev_rsvd_used_ranks_a[m] = self.d_a[m].shape[0]
+                else:
+                    self.all_prev_trunc_errs_a[m].append( (self.d_a[m][-1])/(self.d_a[m][0]) )
+                    self.all_prev_rsvd_used_ranks_a[m].append(self.d_a[m].shape[0])
+                        
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -292,6 +319,13 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
+            if self.adaptable_rsvd_rank == True: # if we do adaptable rank thing, save the rank and error data/statistics
+                if self.steps == 0:
+                    self.all_prev_trunc_errs_g[m] = (self.d_g[m][-1])/(self.d_g[m][0]) # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                    self.all_prev_rsvd_used_ranks_g[m] = self.d_g[m].shape[0]
+                else:
+                    self.all_prev_trunc_errs_g[m].append( (self.d_g[m][-1])/(self.d_g[m][0]) )
+                    self.all_prev_rsvd_used_ranks_g[m].append(self.d_g[m].shape[0])
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -430,6 +464,10 @@ class R_KFACOptimizer(optim.Optimizer):
         if self.steps % self.TInv == 0:
             for m in self.modules:
                 self._update_inv(m)
+        
+        if self.debugger_rsvd_adaptive_rank:
+            print('RANK = {}, self.all_prev_trunc_errs_a = {}, self.all_prev_rsvd_used_ranks_a = {}'.format(self.rank, self.all_prev_trunc_errs_a, self.all_prev_rsvd_used_ranks_a ))
+            print('RANK = {}, self.all_prev_trunc_errs_g = {}, self.all_prev_rsvd_used_ranks_g = {}'.format(self.rank, self.all_prev_trunc_errs_g, self.all_prev_rsvd_used_ranks_g ))
         
         # take the step and allreduce across evd's if the inverses were updated    
         for m in self.modules:
