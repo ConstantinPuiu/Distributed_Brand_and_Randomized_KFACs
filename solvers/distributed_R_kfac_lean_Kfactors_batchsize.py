@@ -204,6 +204,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     actual_rank = min(aa.shape[0], self.rsvd_rank)
                     self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                     # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
+                    self.nkfu_dict_a[module] = 1
+                else:
+                    self.nkfu_dict_a[module] += 1
                     
 
     def _save_grad_output(self, module, grad_input, grad_output):
@@ -243,6 +246,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     actual_rank = min(gg.shape[0], self.rsvd_rank)
                     self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_g's as skinnytall because
                     # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
+                    self.nkfu_dict_g[module] = 1
+                else:
+                    self.nkfu_dict_g[module] += 1
                     
 
     def _prepare_model(self):
@@ -476,7 +482,7 @@ class R_KFACOptimizer(optim.Optimizer):
             for m in self.modules:
                 self._update_inv(m)
         
-        if self.debugger_rsvd_adaptive_rank:
+        if self.debugger_rsvd_adaptive_rank == True and self.steps % self.TInv == 0:
             print('RANK = {}, self.all_prev_trunc_errs_a = {}, self.all_prev_rsvd_used_ranks_a = {}'.format(self.rank, self.all_prev_trunc_errs_a, self.all_prev_rsvd_used_ranks_a ))
             print('RANK = {}, self.all_prev_trunc_errs_g = {}, self.all_prev_rsvd_used_ranks_g = {}'.format(self.rank, self.all_prev_trunc_errs_g, self.all_prev_rsvd_used_ranks_g ))
         
@@ -541,36 +547,36 @@ class R_KFACOptimizer(optim.Optimizer):
         
         #### change work allocation to dimension-based for RSVD
         if self.steps == 0 and self.work_alloc_propto_RSVD_cost == True: # allocate work over KFACTORS in proportion to RSVD cost
-                # output of allocate_RSVD_inversion_work_same_fixed_r
-                # dict_of_lists_of_responsibilities_A = a dictionary where the key is the wwrker number 
-                # and the value is the list of all modules that particular worker is responsible for at Kfactor AA^T
-                # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
-                # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
-                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
-                                                                                    size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
-                                                                                    size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
-                                                                                    target_rank_RSVD = self.rsvd_rank)
-                ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
-                #### 1. delete what's in OLD but NOT in new
-                for key_A_old in self.modules_for_this_rank_A[self.rank]:
-                    if key_A_old not in new_modules_for_this_rank_A[self.rank]:
-                        # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
-                        # self.d_a[key_A_old] = 0 * self.d_a[key_A_old]; self.Q_a[key_A_old] = 0 * self.Q_a[key_A_old]
-                        del self.m_aa[key_A_old], self.nkfu_dict_a[key_A_old]
-                for key_G_old in self.modules_for_this_rank_G[self.rank]:
-                    if key_G_old not in new_modules_for_this_rank_G[self.rank]:
-                        # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
-                        # self.d_g[key_G_old] = 0 * self.d_g[key_G_old]; self.Q_g[key_G_old] = 0 * self.Q_g[key_G_old]
-                        del self.m_gg[key_G_old], self.nkfu_dict_g[key_G_old]
-                #### 2. initialize what's in NEW but NOT in old (and thus does nto exist)
-                ## we do this in save_inuput and _save_grad_output hooks
-                ## but in order to do that we need to rememeber the old keys first
-                self.old_modules_for_this_rank_A = self.modules_for_this_rank_A
-                self.old_modules_for_this_rank_G = self.modules_for_this_rank_G
-                self.modules_for_this_rank_A = new_modules_for_this_rank_A
-                self.modules_for_this_rank_G = new_modules_for_this_rank_G
-                print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == 0, we reallocated work in proportion to squared-size')
-                print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+            # output of allocate_RSVD_inversion_work_same_fixed_r
+            # dict_of_lists_of_responsibilities_A = a dictionary where the key is the wwrker number 
+            # and the value is the list of all modules that particular worker is responsible for at Kfactor AA^T
+            # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
+            # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
+            new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+                                                                                size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
+                                                                                size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
+                                                                                target_rank_RSVD = self.rsvd_rank)
+            ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
+            #### 1. delete what's in OLD but NOT in new
+            for key_A_old in self.modules_for_this_rank_A[self.rank]:
+                if key_A_old not in new_modules_for_this_rank_A[self.rank]:
+                    # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
+                    # self.d_a[key_A_old] = 0 * self.d_a[key_A_old]; self.Q_a[key_A_old] = 0 * self.Q_a[key_A_old]
+                    del self.m_aa[key_A_old]
+            for key_G_old in self.modules_for_this_rank_G[self.rank]:
+                if key_G_old not in new_modules_for_this_rank_G[self.rank]:
+                    # the next line CAN be omitted because we zero them out anyway during _update_inv; but we leave it here to remind ourselves which qunatities are relevant
+                    # self.d_g[key_G_old] = 0 * self.d_g[key_G_old]; self.Q_g[key_G_old] = 0 * self.Q_g[key_G_old]
+                    del self.m_gg[key_G_old]
+            #### 2. initialize what's in NEW but NOT in old (and thus does nto exist)
+            ## we do this in save_inuput and _save_grad_output hooks
+            ## but in order to do that we need to rememeber the old keys first
+            self.old_modules_for_this_rank_A = self.modules_for_this_rank_A
+            self.old_modules_for_this_rank_G = self.modules_for_this_rank_G
+            self.modules_for_this_rank_A = new_modules_for_this_rank_A
+            self.modules_for_this_rank_G = new_modules_for_this_rank_G
+            print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == 0, we reallocated work in proportion to squared-size')
+            print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
         
         self._step(closure)
         self.steps += 1
