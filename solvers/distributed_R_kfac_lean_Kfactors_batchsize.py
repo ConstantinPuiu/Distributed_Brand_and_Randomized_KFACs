@@ -166,10 +166,11 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.nkfu_dict_a[module] = 1
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
-                    #the first time we enter here after the efficient allocation is at step number self.TCov 
-                    self.m_aa[module] = (1 - self.stat_decay) * aa + 0
-                    self.nkfu_dict_a[module] = 1
+                elif self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True:
+                    if (module not in self.old_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
+                        #the first time we enter here after the efficient allocation is at step number self.TCov 
+                        self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                        self.nkfu_dict_a[module] = 1
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                     # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                 else:
@@ -225,10 +226,11 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.nkfu_dict_g[module] = 1
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_G): # we could also say "not in self.m_aa[module], but this has less control over the situation
-                    #the first time we enter here after the efficient allocation is at step number self.TCov
-                    self.m_gg[module] = (1 - self.stat_decay) * gg + 0
-                    self.nkfu_dict_g[module] = 1
+                elif self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True:
+                    if (module not in self.old_modules_for_this_rank_G): # we could also say "not in self.m_aa[module], but this has less control over the situation
+                        #the first time we enter here after the efficient allocation is at step number self.TCov
+                        self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                        self.nkfu_dict_g[module] = 1
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                     # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                 else:
