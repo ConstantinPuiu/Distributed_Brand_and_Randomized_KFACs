@@ -206,9 +206,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                     # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                     self.nkfu_dict_a[module] = 1
-                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier):
+                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier) and (self.steps - self.TCov) != 0:
                     # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
-                    actual_rank = min(aa.shape[0], self.current_rsvd_ranks_a[module])
+                    actual_rank = min(self.Q_a[module].shape[0], self.current_rsvd_ranks_a[module])
                     self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank]
                 else:
                     self.nkfu_dict_a[module] += 1
@@ -253,9 +253,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_g's as skinnytall because
                     # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                     self.nkfu_dict_g[module] = 1
-                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier):
+                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier) and (self.steps - self.TCov) != 0:
                     # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
-                    actual_rank = min(gg.shape[0], self.current_rsvd_ranks_g[module])
+                    actual_rank = min(self.Q_a[module].shape[0], self.current_rsvd_ranks_g[module])
                     self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank]
                 else:
                     self.nkfu_dict_g[module] += 1
