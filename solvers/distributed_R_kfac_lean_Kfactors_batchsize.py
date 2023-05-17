@@ -139,6 +139,8 @@ class R_KFACOptimizer(optim.Optimizer):
         self.all_prev_rsvd_used_ranks_a = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_rsvd_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
+        if self.adaptable_rsvd_rank == True:
+            self.aa_for_reinit = {}; self.gg_for_reinit = {}
         # for the 2 dictionaries above: deallocated modules will be deleted; newly allocated modules will be added and have FEWER elements
         
         # prepare model, and also allocate work across GPUs
@@ -206,10 +208,12 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                     # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                     self.nkfu_dict_a[module] = 1
-                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TCov) > 0:
+                    if self.adaptable_rsvd_rank == True:
+                        self.aa_for_reinit[module] = aa
+                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TCov) > 0 and self.adaptable_rsvd_rank == True:
                     # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
                     actual_rank = min(self.Q_a[module].shape[0], self.current_rsvd_ranks_a[module])
-                    self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank]
+                    self.d_a[module] = 0 * self.aa_for_reinit[module][0,:actual_rank]; self.Q_a[module] = 0 * self.aa_for_reinit[module][:,:actual_rank]
                 else:
                     self.nkfu_dict_a[module] += 1
                     
@@ -253,10 +257,12 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_g's as skinnytall because
                     # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                     self.nkfu_dict_g[module] = 1
-                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier)  == 0 and (self.steps - self.TCov) > 0:
+                    if self.adaptable_rsvd_rank == True:
+                        self.gg_for_reinit[module] = gg
+                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier)  == 0 and (self.steps - self.TCov) > 0 and self.adaptable_rsvd_rank == True:
                     # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
                     actual_rank = min(self.Q_g[module].shape[0], self.current_rsvd_ranks_g[module])
-                    self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank]
+                    self.d_g[module] = 0 * self.gg_for_reinit[module][0,:actual_rank]; self.Q_g[module] = 0 * self.gg_for_reinit[module][:,:actual_rank]
                 else:
                     self.nkfu_dict_g[module] += 1
                     
