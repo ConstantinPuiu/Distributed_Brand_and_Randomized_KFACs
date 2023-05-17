@@ -299,7 +299,9 @@ class R_KFACOptimizer(optim.Optimizer):
                 oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
                 actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
             else:
-                oversampled_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] + self.oversampling_parameter)
+                #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
+                ics = self.current_rsvd_ranks_a[m]
+                oversampled_rank = min(self.m_aa[m].shape[0], ics + self.oversampling_parameter)
                 actual_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] )
             #### END: A: select correct target RSVD rank ################
                 
@@ -545,7 +547,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptve_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier):
+                    if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
                         self.current_rsvd_ranks_a[m] = get_new_rsvd_rank(self.all_prev_trunc_errs_a[m], self.all_prev_rsvd_used_ranks_a[m], 
                                                                          max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_a[m].shape[0]), #tensor_size = self.Q_a[m].shape[0],
                                                                          target_rel_err = self.rsvd_target_truncation_rel_err,
