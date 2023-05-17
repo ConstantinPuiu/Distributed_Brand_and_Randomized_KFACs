@@ -212,10 +212,6 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.nkfu_dict_a[module] = 1
                     if self.adaptable_rsvd_rank == True:
                         self.aa_for_reinit[module] = aa
-                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TCov) > 0 and self.adaptable_rsvd_rank == True:
-                    # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
-                    actual_rank = min(self.Q_a[module].shape[0], self.current_rsvd_ranks_a[module])
-                    self.d_a[module] = 0 * self.aa_for_reinit[module][0,:actual_rank]; self.Q_a[module] = 0 * self.aa_for_reinit[module][:,:actual_rank]
                 else:
                     self.nkfu_dict_a[module] += 1
                     
@@ -263,10 +259,6 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.nkfu_dict_g[module] = 1
                     if self.adaptable_rsvd_rank == True:
                         self.gg_for_reinit[module] = gg
-                elif (self.steps - self.TCov) % (self.TInv * self.rank_adaptation_TInv_multiplier)  == 0 and (self.steps - self.TCov) > 0 and self.adaptable_rsvd_rank == True:
-                    # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
-                    actual_rank = min(self.Q_g[module].shape[0], self.current_rsvd_ranks_g[module])
-                    self.d_g[module] = 0 * self.gg_for_reinit[module][0,:actual_rank]; self.Q_g[module] = 0 * self.gg_for_reinit[module][:,:actual_rank]
                 else:
                     self.nkfu_dict_g[module] += 1
                     
@@ -334,7 +326,11 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
-            
+        
+        elif (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
+            # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
+            actual_rank = min(self.Q_a[m].shape[0], self.current_rsvd_ranks_a[m])
+            self.d_a[m] = 0 * self.aa_for_reinit[m][0,:actual_rank]; self.Q_a[m] = 0 * self.aa_for_reinit[m][:,:actual_rank]
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -365,6 +361,10 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
+        elif (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
+            # This is when we need to reset the shape f Q and d due to changing the rsvd target rank!
+            actual_rank = min(self.Q_g[m].shape[0], self.current_rsvd_ranks_g[m])
+            self.d_g[m] = 0 * self.gg_for_reinit[m][0,:actual_rank]; self.Q_g[m] = 0 * self.gg_for_reinit[m][:,:actual_rank]
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -487,7 +487,7 @@ class R_KFACOptimizer(optim.Optimizer):
         #############################################################################################
         #### NO MORE NEED TO allreduce if AA^T and GG^T statistics have been updated locally
         #############################################################################################
-        print('Taking step {}'.format(self.steps))
+        #print('Taking step {}'.format(self.steps))
 
         self.epoch_number = epoch_number
         self.lr = self.lr_function(epoch_number, self.steps)
@@ -620,6 +620,7 @@ class R_KFACOptimizer(optim.Optimizer):
         
         self._step(closure)
         self.steps += 1
+
 
 
 

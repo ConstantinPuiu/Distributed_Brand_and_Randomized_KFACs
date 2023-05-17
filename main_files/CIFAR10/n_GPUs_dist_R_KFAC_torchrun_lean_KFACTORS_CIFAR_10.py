@@ -226,7 +226,7 @@ def main(world_size, args):
             ## debug negative loss only
             #if y not in [0,1,2,3,4,5,6,7,8,9]: # checing for data being corrupted? (it wasn't this it was forgetting the softmax)
             #    print('rank = {} has encountered WEIRD label yi = {}'.format(y))
-            #print('rank = {} has loss.item() = {}'.format(rank,loss.item()))
+            print('rank = {} at step ={} has loss.item() = {}'.format(rank,optimizer.steps,loss.item()))
 
             loss.backward()
             if jdx % 150 == 0 and epoch == n_epochs - 1:
@@ -281,6 +281,8 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for R-KFAC lean\n'.format(now_start))
+    print('Important args were:\n  --work_alloc_propto_RSVD_cost = {};\n  --adaptable_rsvd_rank = {};\n  --rank_adaptation_TInv_multiplier = {}\n'.format(args.work_alloc_propto_RSVD_cost, args.adaptable_rsvd_rank, args.rank_adaptation_TInv_multiplier))
+    
     print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
     main(world_size, args)
