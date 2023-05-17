@@ -467,7 +467,8 @@ class R_KFACOptimizer(optim.Optimizer):
         #############################################################################################
         #### NO MORE NEED TO allreduce if AA^T and GG^T statistics have been updated locally
         #############################################################################################
-        
+        print('Taking step {}'.format(self.steps))
+
         self.epoch_number = epoch_number
         self.lr = self.lr_function(epoch_number, self.steps)
         for g in self.param_groups:
@@ -494,10 +495,25 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.steps % self.TInv == 0: # if the inversion was done locally this turn, allreduce to disseminate inverse representation
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {} WORLDSIZE {} MODULE {}. Before Allreduce d_a={}, Q_a = {}, d_g={}, Q_g = {} \n'.format(self.rank, self.world_size, m, self.d_a[m], self.Q_a[m], self.d_g[m], self.Q_g[m]))
-                dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)
-                dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = False)
-                dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)
-                dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)
+                #dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)
+                #dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = False)
+                #dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)
+                #dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)
+                handle = dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
+                handle.wait()
+                #self.d_a[m] = 0 * self.d_a[m] + 1
+
+                #print('RANK {}. Doing line : dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
+                handle = dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = True)
+                handle.wait()
+
+                handle = dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = True)
+                handle.wait()
+                #self.d_g[m] = 0 * self.d_g[m] + 1
+
+                #print('RANK {}. DOING LINE: dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
+                handle = dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = True)
+                handle.wait()
                 
                 ########### For dealing wth adaptive RSVD rank : append and recompute at right times #######################
                 if self.adaptable_rsvd_rank == True: # if we do adaptable rank thing, save the rank and error data/statistics

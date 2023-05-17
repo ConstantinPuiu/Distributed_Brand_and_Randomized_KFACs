@@ -13,6 +13,7 @@ import random as rng
 import time
 import argparse
 from datetime import datetime
+import datetime as dateT
 from torch.utils.data.dataloader import default_collate
 
 import sys
@@ -102,7 +103,7 @@ def cleanup():
 def main(world_size, args):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    dist.init_process_group("nccl")#, world_size=world_size)
+    dist.init_process_group("nccl", timeout = dateT.timedelta(seconds = 120))#, world_size=world_size)
     rank = dist.get_rank()
     print('Hello from GPU rank {} with pytorch DDP\n'.format(rank))
     
@@ -117,6 +118,7 @@ def main(world_size, args):
     rsvd_niter = args.rsvd_niter
     damping_type = args.damping_type #'adaptive',
     clip_type = args.clip_type
+    rank_adaptation_TInv_multiplier = args.rank_adaptation_TInv_multiplier
     
     ###others only added after starting CIFAR10
     n_epochs = args.n_epochs
@@ -186,7 +188,8 @@ def main(world_size, args):
                                 adaptable_rsvd_rank = adaptable_rsvd_rank,
                                 rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
                                 maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
-                                rsvd_adaptve_max_history = rsvd_adaptve_max_history)#    optim.SGD(model.parameters(),
+                                rsvd_adaptve_max_history = rsvd_adaptve_max_history,
+                                rank_adaptation_TInv_multiplier = rank_adaptation_TInv_multiplier)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
