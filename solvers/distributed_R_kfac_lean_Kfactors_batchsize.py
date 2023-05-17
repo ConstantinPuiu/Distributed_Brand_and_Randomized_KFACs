@@ -166,6 +166,8 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.m_aa[module] = (1 - self.stat_decay) * aa + 0
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
                     self.nkfu_dict_a[module] = 1
+                    if self.adaptable_rsvd_rank == True:
+                        self.aa_for_reinit[module] = aa
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 elif self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True:
@@ -232,6 +234,8 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.m_gg[module] = (1 - self.stat_decay) * gg + 0
                     self.size_0_of_all_Kfactors_G[module] = gg.size(0)
                     self.nkfu_dict_g[module] = 1
+                    if self.adaptable_rsvd_rank == True:
+                        self.gg_for_reinit[module] = gg
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
                 elif self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True:
