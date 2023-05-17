@@ -27,6 +27,8 @@ def get_new_rsvd_rank(list_err, list_ranks, max_rank = 700, target_rel_err = 0.0
             new_rsvd_rank = min(new_rsvd_rank, max_rank)
         elif target_rel_err +  err_margin_to_incr < avg_rel_err: # then we're not accurate enough, INCREASE target rank
             new_rsvd_rank = min(prev_used_rank + rank_step, max_rank)
+        else:
+            new_rsvd_rank = prev_used_rank
     else:
         # here we will implement more ML - based methods using previous history to predict which rank we should use. Trivial one above is pretty sufficient...
         raise NotImplementedError('type of prediction #{}# for funciton get_new_rsvd_rank NOT implemented (adaptive rank allocation)')
