@@ -227,7 +227,7 @@ def main(world_size, args):
             ## debug negative loss only
             #if y not in [0,1,2,3,4,5,6,7,8,9]: # checing for data being corrupted? (it wasn't this it was forgetting the softmax)
             #    print('rank = {} has encountered WEIRD label yi = {}'.format(y))
-            print('rank = {} at step ={} has loss.item() = {}'.format(rank,optimizer.steps,loss.item()))
+            #print('rank = {} at step ={} has loss.item() = {}'.format(rank,optimizer.steps,loss.item()))
             
             t1 = time.time()
             loss.backward()
@@ -251,43 +251,43 @@ def main(world_size, args):
         ra = 1
     folder_exact = 'R_w' + str(wa) + '_r' + str(ra)
     
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_rsvd_A.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_rsvd_A_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_rsvd_A, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_rsvd_G.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_rsvd_G_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_rsvd_G, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_updt_stats_A.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_updt_stats_A_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_updt_stats_A, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_updt_stats_G.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_updt_stats_G_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_updt_stats_G, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_comm_r_A.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_comm_r_A_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_comm_r_A, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_comm_r_G.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_comm_r_G_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_comm_r_G, handle, protocol=pickle.HIGHEST_PROTOCOL)
              
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_grad_comp.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_grad_comp_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_grad_comp, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_NGD_comp.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_NGD_comp_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_NGD_comp, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_reinit_A.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_reinit_A_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_reinit_A, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_reinit_G.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_reinit_G_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_reinit_G, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_zeroout_A.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_zeroout_A_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_zeroout_A, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_zeroout_G.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/t_zeroout_G_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.t_zeroout_G, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
-    with open('/data/math-opt-ml/chri5570/time_pickles/{}/time_to_reallocate_work.pickle'.format(folder_exact), 'wb') as handle:
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/time_to_reallocate_work_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.time_to_reallocate_work, handle, protocol=pickle.HIGHEST_PROTOCOL)
              
     
