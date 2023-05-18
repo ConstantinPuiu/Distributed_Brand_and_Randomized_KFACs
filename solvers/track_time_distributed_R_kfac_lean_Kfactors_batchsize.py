@@ -144,6 +144,7 @@ class R_KFACOptimizer(optim.Optimizer):
             self.aa_for_reinit = {}; self.gg_for_reinit = {}
         # for the 2 dictionaries above: deallocated modules will be deleted; newly allocated modules will be added and have FEWER elements
         
+        #### for tracking time ##############
         self.t_rsvd_A = {}; self.t_rsvd_G = {} # per module and entries are tuples (time, step)
         self.t_updt_stats_A = {}; self.t_updt_stats_G = {} # per module and entries are tuples (time, step)
         self.t_comm_r_A = {}; self.t_comm_r_G = {} # per module and entries are tuples (time, step)
@@ -152,6 +153,11 @@ class R_KFACOptimizer(optim.Optimizer):
         self.t_reinit_A = {}; self.t_reinit_G = {};
         self.t_zeroout_A = {}; self.t_zeroout_G = {};
         self.time_to_reallocate_work = 0
+        
+        self.simplification_dict = {}
+        self.linear_layer_counter = 0
+        self.conv_layer_counter= 0
+        #### END for tracking time ##############
                 
         # prepare model, and also allocate work across GPUs
         self._prepare_model()
@@ -195,10 +201,10 @@ class R_KFACOptimizer(optim.Optimizer):
                 
                 ##### time measurement ############~
                 t2 = time.time()
-                if module not in self.t_updt_stats_A:
-                    self.t_updt_stats_A[module] = [(t2 - t1 , self.steps, self.rank)]
+                if self.simplification_dict[module] not in self.t_updt_stats_A:
+                    self.t_updt_stats_A[self.simplification_dict[module]] = [(t2 - t1 , self.steps, self.rank)]
                 else:
-                    self.t_updt_stats_A[module].append( (t2 - t1 , self.steps, self.rank) )
+                    self.t_updt_stats_A[self.simplification_dict[module]].append( (t2 - t1 , self.steps, self.rank) )
                 
                 ############ DEBUG ONLY #########
                 if self.Dist_communication_debugger:
@@ -267,10 +273,10 @@ class R_KFACOptimizer(optim.Optimizer):
                 
                 ##### time measurement ############~
                 t2 = time.time()
-                if module not in self.t_updt_stats_G:
-                    self.t_updt_stats_G[module] = [(t2 - t1 , self.steps, self.rank)]
+                if self.simplification_dict[module] not in self.t_updt_stats_G:
+                    self.t_updt_stats_G[self.simplification_dict[module]] = [(t2 - t1 , self.steps, self.rank)]
                 else:
-                    self.t_updt_stats_G[module].append( (t2 - t1 , self.steps, self.rank) )
+                    self.t_updt_stats_G[self.simplification_dict[module]].append( (t2 - t1 , self.steps, self.rank) )
                 
             else: # this part is done only at the init (once per module) to get us the correct dimensions we need to use later
                 if self.steps == 0:
@@ -303,6 +309,13 @@ class R_KFACOptimizer(optim.Optimizer):
                 module.register_backward_hook(self._save_grad_output)
                 print('(%s): %s' % (count, module))
                 count += 1
+                #### saving for simplifyies stuff
+                if classname == 'Conv2d':
+                    self.conv_layer_counter += 1
+                    self.simplification_dict[module] = classname + str(self.conv_layer_counter)
+                elif classname == 'Linear':
+                    self.linear_layer_counter += 1
+                    self.simplification_dict[module] = classname + str(self.linear_layer_counter)
         
         ### WORK ALLOCATION temporary (for self.steps ==0 only)... or not! depending on choice
         # IMPORTANT: USING THE TRIVIAL ALLOCATION MECHANISM ON THE 1st FACTOR COMPUTATION
@@ -354,10 +367,10 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if m not in self.t_rsvd_A:
-                self.t_rsvd_A[m] = [(t2 - t1 , self.steps, self.rank)]
+            if self.simplification_dict[m] not in self.t_rsvd_A:
+                self.t_rsvd_A[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
             else:
-                self.t_rsvd_A[m].append( (t2 - t1 , self.steps, self.rank) )
+                self.t_rsvd_A[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
             
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
@@ -371,10 +384,10 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if m not in self.t_reinit_A:
-                self.t_reinit_A[m] = [(t2 - t1 , self.steps, self.rank)]
+            if self.simplification_dict[m] not in self.t_reinit_A:
+                self.t_reinit_A[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
             else:
-                self.t_reinit_A[m].append( (t2 - t1 , self.steps, self.rank) )
+                self.t_reinit_A[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -383,10 +396,10 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if m not in self.t_zeroout_A:
-                self.t_zeroout_A[m] = [(t2 - t1 , self.steps, self.rank)]
+            if self.simplification_dict[m] not in self.t_zeroout_A:
+                self.t_zeroout_A[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
             else:
-                self.t_zeroout_A[m].append( (t2 - t1 , self.steps, self.rank) )
+                self.t_zeroout_A[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
         # ====  END  ======== AA^T KFACTORS ===================================
         
         # ================ GG^T KFACTORS ===================================
@@ -414,10 +427,10 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if m not in self.t_rsvd_G:
-                self.t_rsvd_G[m] = [(t2 - t1 , self.steps, self.rank)]
+            if self.simplification_dict[m] not in self.t_rsvd_G:
+                self.t_rsvd_G[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
             else:
-                self.t_rsvd_G[m].append( (t2 - t1 , self.steps, self.rank) )
+                self.t_rsvd_G[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
             
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
@@ -431,10 +444,10 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if m not in self.t_rsvd_G:
-                self.t_rsvd_G[m] = [(t2 - t1 , self.steps, self.rank)]
+            if self.simplification_dict[m] not in self.t_rsvd_G:
+                self.t_rsvd_G[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
             else:
-                self.t_rsvd_G[m].append( (t2 - t1 , self.steps, self.rank) )
+                self.t_rsvd_G[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -442,10 +455,10 @@ class R_KFACOptimizer(optim.Optimizer):
             self.d_g[m] = 0 * self.d_g[m];  self.Q_g[m] = 0 * self.Q_g[m]
             ##### time measurement ############~
             t2 = time.time()
-            if m not in self.t_zeroout_G:
-                self.t_zeroout_G[m] = [(t2 - t1 , self.steps, self.rank)]
+            if self.simplification_dict[m] not in self.t_zeroout_G:
+                self.t_zeroout_G[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
             else:
-                self.t_zeroout_G[m].append( (t2 - t1 , self.steps, self.rank) )
+                self.t_zeroout_G[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
         # ====== END ======= GG^T KFACTORS ===================================
 
         
@@ -487,10 +500,10 @@ class R_KFACOptimizer(optim.Optimizer):
                                               n_kfactor_update = nkfu_a, rho = self.stat_decay, damping_type = self.damping_type)  # the damping here is adaptive!
         ##### time measurement ############~
         t2 = time.time()
-        if m not in self.t_NGD_comp:
-            self.t_NGD_comp[m] = [(t2 - t1 , self.steps, self.rank)]
+        if self.simplification_dict[m] not in self.t_NGD_comp:
+            self.t_NGD_comp[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
         else:
-            self.t_NGD_comp[m].append( (t2 - t1 , self.steps, self.rank) )
+            self.t_NGD_comp[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
         
         '''v1 = self.Q_g[m].t() @ p_grad_mat @ self.Q_a[m]
         v2 = v1 / (self.d_g[m].unsqueeze(1) * self.d_a[m].unsqueeze(0) + damping)
@@ -613,10 +626,10 @@ class R_KFACOptimizer(optim.Optimizer):
                 handle.wait()
                 ##### time measurement ############~
                 t2 = time.time()
-                if m not in self.t_comm_r_A:
-                    self.t_comm_r_A[m] = [(t2 - t1 , self.steps, self.rank)]
+                if self.simplification_dict[m] not in self.t_comm_r_A:
+                    self.t_comm_r_A[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
                 else:
-                    self.t_comm_r_A[m].append( (t2 - t1 , self.steps, self.rank) )
+                    self.t_comm_r_A[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
                 
                 # ==================== G ========================
                 t1 = time.time()
@@ -630,10 +643,10 @@ class R_KFACOptimizer(optim.Optimizer):
                 
                 ##### time measurement ############~
                 t2 = time.time()
-                if m not in self.t_comm_r_G:
-                    self.t_comm_r_G[m] = [(t2 - t1 , self.steps, self.rank)]
+                if self.simplification_dict[m] not in self.t_comm_r_G:
+                    self.t_comm_r_G[self.simplification_dict[m]] = [(t2 - t1 , self.steps, self.rank)]
                 else:
-                    self.t_comm_r_G[m].append( (t2 - t1 , self.steps, self.rank) )
+                    self.t_comm_r_G[self.simplification_dict[m]].append( (t2 - t1 , self.steps, self.rank) )
                 
                 ########### For dealing wth adaptive RSVD rank : append and recompute at right times #######################
                 if self.adaptable_rsvd_rank == True: # if we do adaptable rank thing, save the rank and error data/statistics
