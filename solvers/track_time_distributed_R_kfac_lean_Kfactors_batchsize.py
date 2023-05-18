@@ -195,7 +195,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 
                 ##### time measurement ############~
                 t2 = time.time()
-                if self.steps == 0:
+                if module not in self.t_updt_stats_A:
                     self.t_updt_stats_A[module] = [(t2 - t1 , self.steps, self.rank)]
                 else:
                     self.t_updt_stats_A[module].append( (t2 - t1 , self.steps, self.rank) )
@@ -267,7 +267,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 
                 ##### time measurement ############~
                 t2 = time.time()
-                if self.steps == 0:
+                if module not in self.t_updt_stats_G:
                     self.t_updt_stats_G[module] = [(t2 - t1 , self.steps, self.rank)]
                 else:
                     self.t_updt_stats_G[module].append( (t2 - t1 , self.steps, self.rank) )
@@ -354,7 +354,7 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if self.steps == 0:
+            if m not in self.t_rsvd_A:
                 self.t_rsvd_A[m] = [(t2 - t1 , self.steps, self.rank)]
             else:
                 self.t_rsvd_A[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -371,7 +371,7 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if self.steps == 0:
+            if m not in self.t_reinint_A:
                 self.t_reinit_A[m] = [(t2 - t1 , self.steps, self.rank)]
             else:
                 self.t_reinit_A[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -383,7 +383,7 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if self.steps == 0:
+            if m not in self.t_zeroout_A:
                 self.t_zeroout_A[m] = [(t2 - t1 , self.steps, self.rank)]
             else:
                 self.t_zeroout_A[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -414,7 +414,7 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if self.steps == 0:
+            if m not in self.t_rsvd_G:
                 self.t_rsvd_G[m] = [(t2 - t1 , self.steps, self.rank)]
             else:
                 self.t_rsvd_G[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -431,7 +431,7 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if self.steps == 0:
+            if m not in self.t_rsvd_G:
                 self.t_rsvd_G[m] = [(t2 - t1 , self.steps, self.rank)]
             else:
                 self.t_rsvd_G[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -442,7 +442,7 @@ class R_KFACOptimizer(optim.Optimizer):
             self.d_g[m] = 0 * self.d_g[m];  self.Q_g[m] = 0 * self.Q_g[m]
             ##### time measurement ############~
             t2 = time.time()
-            if self.steps == 0:
+            if m not in self.t_zeroout_G:
                 self.t_zeroout_G[m] = [(t2 - t1 , self.steps, self.rank)]
             else:
                 self.t_zeroout_G[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -487,7 +487,7 @@ class R_KFACOptimizer(optim.Optimizer):
                                               n_kfactor_update = nkfu_a, rho = self.stat_decay, damping_type = self.damping_type)  # the damping here is adaptive!
         ##### time measurement ############~
         t2 = time.time()
-        if self.steps == 0:
+        if m not in self.t_NGD_comp:
             self.t_NGD_comp[m] = [(t2 - t1 , self.steps, self.rank)]
         else:
             self.t_NGD_comp[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -613,7 +613,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 handle.wait()
                 ##### time measurement ############~
                 t2 = time.time()
-                if self.steps == 0:
+                if m not in self.t_comm_r_A:
                     self.t_comm_r_A[m] = [(t2 - t1 , self.steps, self.rank)]
                 else:
                     self.t_comm_r_A[m].append( (t2 - t1 , self.steps, self.rank) )
@@ -630,7 +630,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 
                 ##### time measurement ############~
                 t2 = time.time()
-                if self.steps == 0:
+                if m not in self.t_comm_r_G:
                     self.t_comm_r_G[m] = [(t2 - t1 , self.steps, self.rank)]
                 else:
                     self.t_comm_r_G[m].append( (t2 - t1 , self.steps, self.rank) )
