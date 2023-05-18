@@ -245,7 +245,7 @@ def main(world_size, args):
         wa = 0
     else:
         wa = 1
-    if optimizer.rank_adaptation_TInv_multiplier == False:
+    if optimizer.adaptable_rsvd_rank == False:
         ra = 0
     else:
         ra = 1
