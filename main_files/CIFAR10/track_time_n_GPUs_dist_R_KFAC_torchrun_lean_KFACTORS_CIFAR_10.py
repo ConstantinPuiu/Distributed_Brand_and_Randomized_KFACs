@@ -232,7 +232,7 @@ def main(world_size, args):
             t1 = time.time()
             loss.backward()
             t2 = time.time()
-            optimizer.t_grad_comp['0'].append(t2-t1, optimizer.steps, optimizer.rank)
+            optimizer.t_grad_comp['0'].append((t2-t1, optimizer.steps, optimizer.rank))
             if jdx % 150 == 0 and epoch == n_epochs - 1:
                 tend = time.time()
                 print('TIME: {}. Rank (GPU number) {} at batch {}:'.format(tend-tstart, rank, jdx) + str(dist.get_rank())+ ', epoch ' +str(epoch + 1) + ', loss: {}\n'.format(str(loss.item())))
