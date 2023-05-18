@@ -181,6 +181,7 @@ def optimal_most_allocation(number_of_workers, computation_time_for_A, computati
     return list_alloc_module_a, list_alloc_module_g
 
 if __name__ == '__main__': ### testing
+    """
     computation_time_for_A = [170.00000000000003, 350.00000000000006 ,70, 150, 90]
     computation_time_for_G = [190, 300.00000000000006, 200.00000000000003, 50.00000000000001, 100]
     ### defined numbers above to have the same outcome as squareing the sqrt (which loses an eps-precision and might change selection)
@@ -193,7 +194,7 @@ if __name__ == '__main__': ### testing
     computation_time_for_G = [512**2, 512**2, 64**2, 64**2, 128**2, 512**2, 2048**2, 10**2]
     size_0_of_all_Kfactors_A = {'C1': 2305, 'C2': 4609 ,'C3' : 28, 'C4': 577, 'C5': 1153, 'C6': 4609, 'L1': 16385, 'L2': 2049}
     size_0_of_all_Kfactors_G = {'C1': 512, 'C2': 512, 'C3': 64, 'C4': 64, 'C5': 128, 'C6': 512, 'L1': 2048, 'L2': 10}
-    """
+    #"""
 
     print('TESTING optimal_most_allocation. \n input lists')
     print(computation_time_for_A); print(computation_time_for_G)

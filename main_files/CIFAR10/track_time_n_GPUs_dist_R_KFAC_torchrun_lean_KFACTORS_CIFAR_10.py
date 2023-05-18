@@ -289,6 +289,9 @@ def main(world_size, args):
     
     with open('/data/math-opt-ml/chri5570/time_pickles/{}/time_to_reallocate_work_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
         pickle.dump(optimizer.time_to_reallocate_work, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    #
+    with open('/data/math-opt-ml/chri5570/time_pickles/{}/total_time_rk{}.pickle'.format(folder_exact, optimizer.rank), 'wb') as handle:
+        pickle.dump(tend-tstart, handle, protocol=pickle.HIGHEST_PROTOCOL)
              
     
     cleanup()
