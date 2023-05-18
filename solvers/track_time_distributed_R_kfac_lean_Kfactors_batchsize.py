@@ -371,7 +371,7 @@ class R_KFACOptimizer(optim.Optimizer):
             
             ##### time measurement ############~
             t2 = time.time()
-            if m not in self.t_reinint_A:
+            if m not in self.t_reinit_A:
                 self.t_reinit_A[m] = [(t2 - t1 , self.steps, self.rank)]
             else:
                 self.t_reinit_A[m].append( (t2 - t1 , self.steps, self.rank) )
