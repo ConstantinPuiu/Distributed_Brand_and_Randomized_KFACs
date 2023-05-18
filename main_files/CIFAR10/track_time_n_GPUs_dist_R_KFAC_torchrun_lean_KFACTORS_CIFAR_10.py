@@ -298,8 +298,8 @@ def main(world_size, args):
         ad_hoc_dict_for_odule_size_eff_storage_A = {}
         ad_hoc_dict_for_odule_size_eff_storage_G = {}
         for module in optimizer.simplification_dict:
-            ad_hoc_dict_for_odule_size_eff_storage_A[module] = optimizer.size_0_of_all_Kfactors_A[module]
-            ad_hoc_dict_for_odule_size_eff_storage_G[module] = optimizer.size_0_of_all_Kfactors_G[module]
+            ad_hoc_dict_for_odule_size_eff_storage_A[optimizer.simplification_dict[module]] = optimizer.size_0_of_all_Kfactors_A[module]
+            ad_hoc_dict_for_odule_size_eff_storage_G[optimizer.simplification_dict[module]] = optimizer.size_0_of_all_Kfactors_G[module]
         with open('/data/math-opt-ml/chri5570/time_pickles/{}/kfactor_size_A.pickle'.format(folder_exact), 'wb') as handle:
             pickle.dump(ad_hoc_dict_for_odule_size_eff_storage_A, handle, protocol=pickle.HIGHEST_PROTOCOL)
         with open('/data/math-opt-ml/chri5570/time_pickles/{}/kfactor_size_G.pickle'.format(folder_exact), 'wb') as handle:
