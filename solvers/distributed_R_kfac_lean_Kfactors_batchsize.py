@@ -299,7 +299,7 @@ class R_KFACOptimizer(optim.Optimizer):
         print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
     
     def time_measurement_alloc_for_lazy_A_or_G(self, m, Kfactor_type):
-        if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+        if self.steps == self.TInv and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
             # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
             # this is the time of a module we DO NOT RSVD on *THIS GPU, so set time to zero, for an allreduction to happen later which will ensure all GPUs will know the right times
             if Kfactor_type == 'A':
@@ -323,7 +323,7 @@ class R_KFACOptimizer(optim.Optimizer):
             :return: no returns.
             """
             
-            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+            if self.steps == self.TInv and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t1 = time.time()
             
@@ -349,7 +349,7 @@ class R_KFACOptimizer(optim.Optimizer):
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_a[m] = self.Q_a[m].contiguous()
             
-            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+            if self.steps == self.TInv and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t2 = time.time()
                 self.RSVD_measured_time_of_all_Kfactors_A[m] = t2 - t1
@@ -372,7 +372,7 @@ class R_KFACOptimizer(optim.Optimizer):
         
         # ================ GG^T KFACTORS ===================================
         if m in self.modules_for_this_rank_G[self.rank]:
-            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+            if self.steps == self.TInv and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t1 = time.time()
             eps = 1e-10  # for numerical stability
@@ -396,7 +396,7 @@ class R_KFACOptimizer(optim.Optimizer):
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
             
-            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+            if self.steps == self.TInv  and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t2 = time.time()
                 self.RSVD_measured_time_of_all_Kfactors_G[m] = t2 - t1
@@ -668,8 +668,9 @@ class R_KFACOptimizer(optim.Optimizer):
             self.old_modules_for_this_rank_G = self.modules_for_this_rank_G
             self.modules_for_this_rank_A = new_modules_for_this_rank_A
             self.modules_for_this_rank_G = new_modules_for_this_rank_G
-            print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == 0, we reallocated work in proportion to squared-size')
+            print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == {}, we reallocated work in proportion to squared-size'.format(self.steps))
             print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+            print(' We also had self.work_eff_alloc_with_time_measurement == {}'.format(self.work_eff_alloc_with_time_measurement))
         
         self._step(closure)
         self.steps += 1
