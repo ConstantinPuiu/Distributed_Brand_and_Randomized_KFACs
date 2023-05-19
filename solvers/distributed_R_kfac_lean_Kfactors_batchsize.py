@@ -1,4 +1,5 @@
 import math
+import time
 
 import torch
 import torch.optim as optim
@@ -12,7 +13,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping)
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank
 
 class R_KFACOptimizer(optim.Optimizer):
@@ -32,6 +33,7 @@ class R_KFACOptimizer(optim.Optimizer):
                  oversampling_parameter = 10,
                  rsvd_niter = 3,
                  work_alloc_propto_RSVD_cost = True,
+                 work_eff_alloc_with_time_measurement = True,
                  damping_type = 'adaptive',
                  clip_type = 'non_standard',
                  # for adaptive rsvd rank
@@ -106,10 +108,14 @@ class R_KFACOptimizer(optim.Optimizer):
         self.rsvd_niter = rsvd_niter
         #### specific to Work allocation in proportion to RSVD cost
         self.work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost
+        self.work_eff_alloc_with_time_measurement = work_eff_alloc_with_time_measurement
         self.size_0_of_all_Kfactors_A = {} #once obtained, save for later usage
         self.size_0_of_all_Kfactors_G = {} #once obtained, save for later usage
         self.modules_for_this_rank_A = {} # the output of work-schedulling across GPUs for A KFACTORS
         self.modules_for_this_rank_G = {} # the output of work-schedulling across GPUs for G KFACTORS
+        if work_alloc_propto_RSVD_cost and work_eff_alloc_with_time_measurement:
+            self.RSVD_measured_time_of_all_Kfactors_A = {} # we only measure once in the simplest implementation, we may then think of re-adjusting
+            self.RSVD_measured_time_of_all_Kfactors_G = {} # we only measure once in the simplest implementation, we may then think of re-adjusting
         # introduced with RKFAC for te 1st time but also relevant to simple KFAC
         self.damping_type = damping_type
         self.clip_type = clip_type
@@ -170,7 +176,9 @@ class R_KFACOptimizer(optim.Optimizer):
                         self.aa_for_reinit[module] = aa
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                elif self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True:
+                
+                elif (self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True and not self.work_eff_alloc_with_time_measurement) or (self.steps == self.TInv + self.TCov and self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement):
+                    # the or is there because depending on whether self.wokr_eff_alloc_with_time_measurement i True or False we need to do the reinitialization at DIFFETRENT iteration number (since time measurement realloc is done at self.Tinv iteration whereas the other one is done at 0th iter)
                     if (module not in self.old_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
                         #the first time we enter here after the efficient allocation is at step number self.TCov 
                         self.m_aa[module] = (1 - self.stat_decay) * aa + 0
@@ -234,7 +242,8 @@ class R_KFACOptimizer(optim.Optimizer):
                         self.gg_for_reinit[module] = gg
                     # rather than initialize with zero, then update running stat at beginning, initialize directly from (1-rho) *new + rho * 0 (init from zero and send I init to reg)
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
-                elif self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True:
+                elif (self.steps == self.TCov and self.work_alloc_propto_RSVD_cost == True and not self.work_eff_alloc_with_time_measurement) or (self.steps == self.TInv + self.TCov and self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement):
+                    # the or is there because depending on whether self.wokr_eff_alloc_with_time_measurement i True or False we need to do the reinitialization at DIFFETRENT iteration number (since time measurement realloc is done at self.Tinv iteration whereas the other one is done at 0th iter)
                     if (module not in self.old_modules_for_this_rank_G): # we could also say "not in self.m_aa[module], but this has less control over the situation
                         #the first time we enter here after the efficient allocation is at step number self.TCov
                         self.m_gg[module] = (1 - self.stat_decay) * gg + 0
@@ -288,7 +297,18 @@ class R_KFACOptimizer(optim.Optimizer):
         # returns a dictionary of lists!
         print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
         print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
-
+    
+    def time_measurement_alloc_for_lazy_A_or_G(self, m, Kfactor_type):
+        if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+            # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
+            # this is the time of a module we DO NOT RSVD on *THIS GPU, so set time to zero, for an allreduction to happen later which will ensure all GPUs will know the right times
+            if Kfactor_type == 'A':
+                self.RSVD_measured_time_of_all_Kfactors_A[m] = 0
+            elif Kfactor_type == 'G':
+                self.RSVD_measured_time_of_all_Kfactors_G[m] = 0
+            else:
+                raise ValueError('Kfactor_type must be either A or G (string 1 character)')
+    
     def _update_inv(self, m):
         """Do eigen decomposition for computing inverse of the ~ fisher.
         :param m: The layer
@@ -302,8 +322,12 @@ class R_KFACOptimizer(optim.Optimizer):
             :param m: The layer
             :return: no returns.
             """
-            eps = 1e-10  # for numerical stability
             
+            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+                # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
+                t1 = time.time()
+            
+            eps = 1e-10  # for numerical stability
             #### A: select correct target RSVD rank ################
             if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rank_adaptation_TInv_multiplier):
                 oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
@@ -315,14 +339,21 @@ class R_KFACOptimizer(optim.Optimizer):
                 actual_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] )
             #### END: A: select correct target RSVD rank ################
                 
-            self.U_aa[m], self.D_aa[m], self.V_aa[m] = torch.svd_lowrank(self.m_aa[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
-            self.Q_a[m] = self.V_aa[m][:,:actual_rank] + 0.0 # 0.5*(self.U_aa[m][:,:actual_rank] + self.V_aa[m][:,:actual_rank]); 
-            del self.U_aa[m]; del self.V_aa[m]
-            self.d_a[m] = self.D_aa[m][:actual_rank]; # self.d_a[m][ self.d_a[m] < self.damping] = self.damping
+            _, self.d_a[m], self.Q_a[m] = torch.svd_lowrank(self.m_aa[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
+            self.Q_a[m] = self.Q_a[m][:,:actual_rank] # 0.5*(self.U_aa[m][:,:actual_rank] + self.V_aa[m][:,:actual_rank]); 
+            #del self.U_aa[m]; del self.V_aa[m]
+            # _, self.d_a[m], self.Q_a[m] is U, D, V from m_aa \svdeq UDV^T
+            self.d_a[m] = self.d_a[m][:actual_rank]; # self.d_a[m][ self.d_a[m] < self.damping] = self.damping
             
             self.d_a[m].mul_((self.d_a[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_a[m] = self.Q_a[m].contiguous()
+            
+            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+                # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
+                t2 = time.time()
+                self.RSVD_measured_time_of_all_Kfactors_A[m] = t2 - t1
+            
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
@@ -331,14 +362,19 @@ class R_KFACOptimizer(optim.Optimizer):
             # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
             actual_rank = min(self.Q_a[m].shape[0], self.current_rsvd_ranks_a[m])
             self.d_a[m] = 0 * self.aa_for_reinit[m][0,:actual_rank]; self.Q_a[m] = 0 * self.aa_for_reinit[m][:,:actual_rank]
+            self.time_measurement_alloc_for_lazy_A_or_G(m, Kfactor_type = 'A')
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
             self.d_a[m] = 0 * self.d_a[m];  self.Q_a[m] = 0 * self.Q_a[m]
+            self.time_measurement_alloc_for_lazy_A_or_G(m, Kfactor_type = 'A')
         # ====  END  ======== AA^T KFACTORS ===================================
         
         # ================ GG^T KFACTORS ===================================
         if m in self.modules_for_this_rank_G[self.rank]:
+            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+                # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
+                t1 = time.time()
             eps = 1e-10  # for numerical stability
             
             #### G: select correct target RSVD rank ################
@@ -350,14 +386,21 @@ class R_KFACOptimizer(optim.Optimizer):
                 actual_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m])
             #### end G : select correct target RSVD rank ################
                 
-            self.U_gg[m], self.D_gg[m], self.V_gg[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M=None) # this is rsvd
-            self.Q_g[m] = self.V_gg[m][:,:actual_rank] + 0.0 # 0.5 * ( self.U_gg[m][:,:actual_rank] + self.V_gg[m][:,:actual_rank]);
-            del self.U_gg[m]; del self.V_gg[m]
-            self.d_g[m] = self.D_gg[m][ : actual_rank ]; # d_g[m][ d_g[m] < self.damping ] = self.damping
+            _, self.d_g[m], self.Q_g[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M=None) # this is rsvd
+            self.Q_g[m] = self.Q_g[m][:,:actual_rank] # 0.5 * ( self.U_gg[m][:,:actual_rank] + self.V_gg[m][:,:actual_rank]);
+            #del self.U_gg[m]; del self.V_gg[m]
+            # _, self.d_g[m], self.Q_g[m] is U, D, V from m_aa \svdeq UDV^T
+            self.d_g[m] = self.d_g[m][ : actual_rank ]; # d_g[m][ d_g[m] < self.damping ] = self.damping
     
             self.d_g[m].mul_((self.d_g[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
+            
+            if self.steps % self.TInv == 1 and self.adaptable_rsvd_rank and self.work_eff_alloc_with_time_measurement:
+                # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
+                t2 = time.time()
+                self.RSVD_measured_time_of_all_Kfactors_G[m] = t2 - t1
+            
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
@@ -365,10 +408,12 @@ class R_KFACOptimizer(optim.Optimizer):
             # This is when we need to reset the shape f Q and d due to changing the rsvd target rank!
             actual_rank = min(self.Q_g[m].shape[0], self.current_rsvd_ranks_g[m])
             self.d_g[m] = 0 * self.gg_for_reinit[m][0,:actual_rank]; self.Q_g[m] = 0 * self.gg_for_reinit[m][:,:actual_rank]
+            self.time_measurement_alloc_for_lazy_A_or_G(m, Kfactor_type = 'G')
         else:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
             self.d_g[m] = 0 * self.d_g[m];  self.Q_g[m] = 0 * self.Q_g[m]
+            self.time_measurement_alloc_for_lazy_A_or_G(m, Kfactor_type = 'G')
         # ====== END ======= GG^T KFACTORS ===================================
 
         
@@ -586,16 +631,24 @@ class R_KFACOptimizer(optim.Optimizer):
         self._kl_clip_and_update_grad(updates, lr)
         
         #### change work allocation to dimension-based for RSVD
-        if self.steps == 0 and self.work_alloc_propto_RSVD_cost == True: # allocate work over KFACTORS in proportion to RSVD cost
+        if (self.steps == 0 and self.work_alloc_propto_RSVD_cost == True and not self.work_eff_alloc_with_time_measurement) or (self.steps == self.TInv and self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement): 
+            # we have the or because whetehr self.work_eff_alloc_with_time_measurement tells us if we do our reallocation at 0th step or at self.Tinv step
+            # allocate work over KFACTORS in proportion to RSVD cost
             # output of allocate_RSVD_inversion_work_same_fixed_r
             # dict_of_lists_of_responsibilities_A = a dictionary where the key is the wwrker number 
             # and the value is the list of all modules that particular worker is responsible for at Kfactor AA^T
             # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
             # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
-            new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+            if not self.work_eff_alloc_with_time_measurement:
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
                                                                                 size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
                                                                                 size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
                                                                                 target_rank_RSVD = self.rsvd_rank)
+            else: #if self.work_eff_alloc_with_time_measurement:
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers = self.world_size, 
+                                                                                measured_invtime_of_all_Kfactors_G = self.RSVD_measured_time_of_all_Kfactors_G,
+                                                                                measured_invtime_of_all_Kfactors_A = self.RSVD_measured_time_of_all_Kfactors_A)
+                print('\n Did time-measurement based allocation at rank = {} steps = {}\n'.format(self.rank, self.steps))
             ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
             #### 1. delete what's in OLD but NOT in new
             for key_A_old in self.modules_for_this_rank_A[self.rank]:

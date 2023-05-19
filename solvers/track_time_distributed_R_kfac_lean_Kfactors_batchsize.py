@@ -420,6 +420,7 @@ class R_KFACOptimizer(optim.Optimizer):
             _, self.d_g[m], self.Q_g[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M=None) # this is rsvd
             self.Q_g[m] = self.Q_g[m][:,:actual_rank] # 0.5 * ( self.U_gg[m][:,:actual_rank] + self.V_gg[m][:,:actual_rank]);
             #del self.U_gg[m]; del self.V_gg[m]
+            # _, self.d_a[m], self.Q_a[m] is U, D, V from m_aa \svdeq UDV^T
             self.d_g[m] = self.d_g[m][ : actual_rank ]; # d_g[m][ d_g[m] < self.damping ] = self.damping
     
             self.d_g[m].mul_((self.d_g[m] > eps).float())

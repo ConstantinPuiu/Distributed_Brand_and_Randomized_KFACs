@@ -130,6 +130,11 @@ def main(world_size, args):
         work_alloc_propto_RSVD_cost = False
     else:
         work_alloc_propto_RSVD_cost = True
+    
+    if args.work_eff_alloc_with_time_measurement == 0:
+        work_eff_alloc_with_time_measurement = False
+    else:
+        work_eff_alloc_with_time_measurement = True
         
     ### rsvd adaptive rank ##########
     if args.adaptable_rsvd_rank == 0:
@@ -183,6 +188,7 @@ def main(world_size, args):
                                 oversampling_parameter = oversampling_parameter,
                                 rsvd_niter = rsvd_niter,
                                 work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost,
+                                work_eff_alloc_with_time_measurement = work_eff_alloc_with_time_measurement,
                                 damping_type = damping_type, #'adaptive',
                                 clip_type = clip_type,
                                 adaptable_rsvd_rank = adaptable_rsvd_rank,
@@ -263,7 +269,8 @@ def parse_args():
     
     ### added to deal with more efficient work allocaiton
     #
-    parser.add_argument('--work_alloc_propto_RSVD_cost', type=int, default=1, help='Do we want to allocate work in proportion to actula RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--work_alloc_propto_RSVD_cost', type=int, default=1, help='Do we want to allocate work in proportion to FORECASTED (based on theoretical complexity) RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--work_eff_alloc_with_time_measurement', type=int, default=1, help='Do we want to allocate work in proportion to MEASURED (somewhat noisy) RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly. Setting this to 1 (TRUE) has no effect if work_alloc_propto_RSVD_cost == False' ) 
     
     #### added to dal with RSVD adaptable rank
     parser.add_argument('--adaptable_rsvd_rank', type=int, default=1, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
