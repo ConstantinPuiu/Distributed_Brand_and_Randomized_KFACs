@@ -312,7 +312,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 # so it's sufficient to track the index
             elif Kfactor_type == 'G':
                 self.RSVD_measured_time_of_all_Kfactors_G[m] = 0
-                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[self.counter_for_tensor_of_measured_time_A] = 0
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[self.counter_for_tensor_of_measured_time_G] = 0
                 self.counter_for_tensor_of_measured_time_G += 1
             else:
                 raise ValueError('Kfactor_type must be either A or G (string 1 character)')
