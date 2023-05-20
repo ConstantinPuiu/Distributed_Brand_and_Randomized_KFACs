@@ -325,16 +325,6 @@ class R_KFACOptimizer(optim.Optimizer):
         # we now can have a GPU doing only the A or only the G KFACTOR of a layer/module
          ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" KFACTORS
         # ================ AA^T KFACTORS ===================================
-        if self.steps == 0 and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
-            # just initialize a zero tensor in a less explicit way to avoit tensor formation on CPU and sending to GPU
-            # we initialize this 1 inversion before the time we need them: that's to ensure the 2nd condition of the if below holds for sure
-            # at some point and that we start self.steps == self.Tinv with the tensors initialized
-            if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_A is None) and len(self.modules) <= self.m_aa[m].size(0):
-                self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = 0 * self.m_aa[m][0, :len(self.modules)] + 0# initializing in a nontrivial way to avoid sending to GPU
-                self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A.contiguous()
-            #if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_G is None) and len(self.modules) <= self.m_gg[m]:
-                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A + 0 #0 * self.m_aa[m][0, :len(self.modules)] + 0# initializing in a nontrivial way to avoid sending to GPU
-                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G.contiguous()
         
         if m in self.modules_for_this_rank_A[self.rank]:
             """Do eigen decomposition for computing inverse of the ~ fisher.
@@ -621,7 +611,19 @@ class R_KFACOptimizer(optim.Optimizer):
                 #print('RANK {}. DOING LINE: dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 handle = dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
-                    
+                
+                ########FOR TIME-MEASUREMENT EFF WORK ALLOC:  initialize tensors to store measured times ###############
+                if self.steps == 0 and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
+                # just initialize a zero tensor in a less explicit way to avoit tensor formation on CPU and sending to GPU
+                # we initialize this 1 inversion before the time we need them: that's to ensure the 2nd condition of the if below holds for sure
+                # at some point and that we start self.steps == self.Tinv with the tensors initialized
+                    if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_A is None) and len(self.modules) <= self.m_aa[m].size(0):
+                        self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = 0 * self.m_aa[m][0, :len(self.modules)] + 0# initializing in a nontrivial way to avoid sending to GPU
+                        self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A.contiguous()
+                    #if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_G is None) and len(self.modules) <= self.m_gg[m]:
+                        self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A + 0 #0 * self.m_aa[m][0, :len(self.modules)] + 0# initializing in a nontrivial way to avoid sending to GPU
+                        self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G.contiguous()
+                ########END: FOR TIME-MEASUREMENT EFF WORK ALLOC:  initialize tensors to store measured times ###############
                 
                 ########### For dealing wth adaptive RSVD rank : append and recompute at right times #######################
                 if self.adaptable_rsvd_rank == True: # if we do adaptable rank thing, save the rank and error data/statistics
