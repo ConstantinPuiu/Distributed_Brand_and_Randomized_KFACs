@@ -617,7 +617,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 # just initialize a zero tensor in a less explicit way to avoit tensor formation on CPU and sending to GPU
                 # we initialize this 1 inversion before the time we need them: that's to ensure the 2nd condition of the if below holds for sure
                 # at some point and that we start self.steps == self.Tinv with the tensors initialized
-                    if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_A is None) and len(self.modules) <= self.m_aa[m].size(0):
+                    if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_A is None) and len(self.modules) <= self.Q_a[m].size(0):
                         self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = 0 * self.m_aa[m][0, :len(self.modules)] + 0# initializing in a nontrivial way to avoid sending to GPU
                         self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A.contiguous()
                     #if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_G is None) and len(self.modules) <= self.m_gg[m]:
