@@ -580,6 +580,15 @@ class R_KFACOptimizer(optim.Optimizer):
                 handle = dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 
+                if self.steps == self.TInv and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
+                    # communicate for self.RSVD_measured_time_of_all_Kfactors_A[m]
+                    handle = dist.all_reduce(self.RSVD_measured_time_of_all_Kfactors_A[m], dist.ReduceOp.SUM, async_op = True)
+                    handle.wait()
+                    # communicate for self.RSVD_measured_time_of_all_Kfactors_G[m]
+                    handle = dist.all_reduce(self.RSVD_measured_time_of_all_Kfactors_G[m], dist.ReduceOp.SUM, async_op = True)
+                    handle.wait()
+                    
+                
                 ########### For dealing wth adaptive RSVD rank : append and recompute at right times #######################
                 if self.adaptable_rsvd_rank == True: # if we do adaptable rank thing, save the rank and error data/statistics
                     ####### A & G: append rank and errors #### since done after communication we have global info everywhere ##########
