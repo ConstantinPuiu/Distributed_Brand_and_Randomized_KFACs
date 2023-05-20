@@ -116,6 +116,8 @@ class R_KFACOptimizer(optim.Optimizer):
         if work_alloc_propto_RSVD_cost and work_eff_alloc_with_time_measurement:
             self.RSVD_measured_time_of_all_Kfactors_A = {} # we only measure once in the simplest implementation, we may then think of re-adjusting
             self.RSVD_measured_time_of_all_Kfactors_G = {} # we only measure once in the simplest implementation, we may then think of re-adjusting
+            self.counter_for_tensor_of_measured_time_A = 0; self.counter_for_tensor_of_measured_time_G = 0
+        self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = None; self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = None
         # introduced with RKFAC for te 1st time but also relevant to simple KFAC
         self.damping_type = damping_type
         self.clip_type = clip_type
@@ -304,8 +306,14 @@ class R_KFACOptimizer(optim.Optimizer):
             # this is the time of a module we DO NOT RSVD on *THIS GPU, so set time to zero, for an allreduction to happen later which will ensure all GPUs will know the right times
             if Kfactor_type == 'A':
                 self.RSVD_measured_time_of_all_Kfactors_A[m] = 0
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_A[self.counter_for_tensor_of_measured_time_A] = 0
+                self.counter_for_tensor_of_measured_time_A += 1
+                # tFor the tensor-form: he idea is that the modules are iterated over in a particualr, fixed, and the SAME (over GPU) order. 
+                # so it's sufficient to track the index
             elif Kfactor_type == 'G':
                 self.RSVD_measured_time_of_all_Kfactors_G[m] = 0
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[self.counter_for_tensor_of_measured_time_A] = 0
+                self.counter_for_tensor_of_measured_time_G += 1
             else:
                 raise ValueError('Kfactor_type must be either A or G (string 1 character)')
     
@@ -317,6 +325,17 @@ class R_KFACOptimizer(optim.Optimizer):
         # we now can have a GPU doing only the A or only the G KFACTOR of a layer/module
          ### PARALLELIZE OVER layers: for each GPU-RANK compute only the EVD's of the "some" KFACTORS
         # ================ AA^T KFACTORS ===================================
+        if self.steps == 0 and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
+            # just initialize a zero tensor in a less explicit way to avoit tensor formation on CPU and sending to GPU
+            # we initialize this 1 inversion before the time we need them: that's to ensure the 2nd condition of the if below holds for sure
+            # at some point and that we start self.steps == self.Tinv with the tensors initialized
+            if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_A is None) and len(self.modules) <= self.m_aa[m]:
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = 0 * self.m_aa[m][0, :len(self.modules)] + 0# initializing in a nontrivial way to avoid sending to GPU
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A.contiguous()
+            #if (self.RSVD_measured_time_of_all_Kfactors_tensor_format_G is None) and len(self.modules) <= self.m_gg[m]:
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A + 0 #0 * self.m_aa[m][0, :len(self.modules)] + 0# initializing in a nontrivial way to avoid sending to GPU
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G.contiguous()
+        
         if m in self.modules_for_this_rank_A[self.rank]:
             """Do eigen decomposition for computing inverse of the ~ fisher.
             :param m: The layer
@@ -352,7 +371,10 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.steps == self.TInv and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t2 = time.time()
-                self.RSVD_measured_time_of_all_Kfactors_A[m] = t2 - t1
+                self.RSVD_measured_time_of_all_Kfactors_A[m] = t2 - t1 # we save this to create the appropriate dictionary structure, and while the number is right,
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_A[self.counter_for_tensor_of_measured_time_A] = t2 - t1
+                self.counter_for_tensor_of_measured_time_A += 1
+                # we will over-write it later (at the right time), with the main aim to get the zeros (of the not-inversed-on-this-GPU tensors ) to the appropriate measured values
             
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
@@ -400,6 +422,8 @@ class R_KFACOptimizer(optim.Optimizer):
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t2 = time.time()
                 self.RSVD_measured_time_of_all_Kfactors_G[m] = t2 - t1
+                self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[self.counter_for_tensor_of_measured_time_G] = t2 - t1
+                self.counter_for_tensor_of_measured_time_G += 1
             
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
@@ -554,6 +578,24 @@ class R_KFACOptimizer(optim.Optimizer):
             print('RANK = {}, self.all_prev_trunc_errs_a = {}, self.all_prev_rsvd_used_ranks_a = {}'.format(self.rank, self.all_prev_trunc_errs_a, self.all_prev_rsvd_used_ranks_a ))
             print('RANK = {}, self.all_prev_trunc_errs_g = {}, self.all_prev_rsvd_used_ranks_g = {}'.format(self.rank, self.all_prev_trunc_errs_g, self.all_prev_rsvd_used_ranks_g ))
         
+        ############ Communicate missing elements of TIME MEASUREMENT dictionary ############
+        #### packed into a tensor for most efficient communication ################ (do just 1 communication rather than as many as modules, 
+        #then we locally "unpack" the data in the correct format)
+        # communicate for self.RSVD_measured_time_of_all_Kfactors_A[m]
+        if self.steps == self.TInv and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
+            handle = dist.all_reduce(self.RSVD_measured_time_of_all_Kfactors_tensor_format_A, dist.ReduceOp.SUM, async_op = True)
+            handle.wait()
+            # communicate for self.RSVD_measured_time_of_all_Kfactors_G[m]
+            handle = dist.all_reduce(self.RSVD_measured_time_of_all_Kfactors_tensor_format_G, dist.ReduceOp.SUM, async_op = True)
+            handle.wait()
+            
+            ### NOW unpack the tensor used to communicate missing time measurements into the correct format of dicitonary (used for allocation)
+            for tensor_idx, m in enumerate(self.RSVD_measured_time_of_all_Kfactors_A.keys()):
+                # we can get away with doing 1 for loop over the keys of self.RSVD_measured_time_of_all_Kfactors_A because the ones of the G-pair are the same and in the same order
+                self.RSVD_measured_time_of_all_Kfactors_A[m] = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A[tensor_idx]
+                self.RSVD_measured_time_of_all_Kfactors_G[m] = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[tensor_idx]
+        ######## END : Communicate missing elements of TIME MEASUREMENT dictionary ############
+        
         # take the step and allreduce across evd's if the inverses were updated    
         for m in self.modules:
             classname = m.__class__.__name__
@@ -579,14 +621,6 @@ class R_KFACOptimizer(optim.Optimizer):
                 #print('RANK {}. DOING LINE: dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 handle = dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
-                
-                if self.steps == self.TInv and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
-                    # communicate for self.RSVD_measured_time_of_all_Kfactors_A[m]
-                    handle = dist.all_reduce(self.RSVD_measured_time_of_all_Kfactors_A[m], dist.ReduceOp.SUM, async_op = True)
-                    handle.wait()
-                    # communicate for self.RSVD_measured_time_of_all_Kfactors_G[m]
-                    handle = dist.all_reduce(self.RSVD_measured_time_of_all_Kfactors_G[m], dist.ReduceOp.SUM, async_op = True)
-                    handle.wait()
                     
                 
                 ########### For dealing wth adaptive RSVD rank : append and recompute at right times #######################
