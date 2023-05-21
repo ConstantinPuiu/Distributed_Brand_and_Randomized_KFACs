@@ -1,4 +1,7 @@
+import torch
+
 # wrappers ###############
+## NOTE: for TESNOR ONLY use: allocate_work_timebased_tensors
 def allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD, batch_size):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
                                                                   size_0_of_all_Kfactors_G, 
@@ -109,6 +112,54 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
     
     return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G
 
+def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_for_A, tensor_computation_time_for_G, modules_list):
+    # number_of_workers - self explanatory
+    # tensor_computation_time_for_A - tensor format, the 1st element is the time for Kfactor A of the 1st module in modules_list
+    # tensor_computation_time_for_G - tensor format, the 1st element is the time for Kfactor G of the 1st module in modules_list
+    # modules_list - self explanatory
+    number_of_modules = tensor_computation_time_for_A.shape[0]
+    tensor_times_concat = torch.concat([tensor_computation_time_for_A, tensor_computation_time_for_G])
+    allocation_tensor_for_ranks = 0 * tensor_times_concat # this tensor will hold 
+    argsort = torch.argsort( - tensor_times_concat) # sort descendingly
+    
+    if 2 * number_of_modules <= number_of_workers: ### solve particular case sepparately: 1. TRIVIALish: more workers than KFACTORS
+        #note that the number of Kfactors is 2x the number of modules
+        allocation_tensor_for_ranks = torch.arange(0, 2 * number_of_modules)
+    else: # 2. solve the case when there's fewer workers than KFACTORS
+        #### initialize per-module sums to zero
+        tensor_sumtimes_for_each_module = 0 * allocation_tensor_for_ranks[0 : number_of_workers]
+        #### allocate in tensor (and concatenated) format
+        for argsort_idx in range(0, argsort.shape[0]):
+            idx = argsort[argsort_idx]
+            time_value = tensor_times_concat[idx]
+            #### find out which worker to allocate this work to
+            worker_to_allocate_to = torch.argmin(tensor_sumtimes_for_each_module)
+            #### allocate work (save)
+            allocation_tensor_for_ranks[ idx ] = worker_to_allocate_to
+            #### ammend sum for future allocations
+            tensor_sumtimes_for_each_module[ worker_to_allocate_to ] += time_value
+    
+    #### translate tensor-format (and concantenated) allocation in list of module allocation
+    dict_of_lists_of_responsibilities_A = {}; dict_of_lists_of_responsibilities_G = {}
+    for i, module in enumerate(modules_list):
+        #### extract which rank is allocated to this module
+        rank_alloc_to_m_and_A = allocation_tensor_for_ranks[i]
+        rank_alloc_to_m_and_G = allocation_tensor_for_ranks[i + number_of_modules]
+        ### append to the correct dicionaries
+        if rank_alloc_to_m_and_A in dict_of_lists_of_responsibilities_A:
+            dict_of_lists_of_responsibilities_A[rank_alloc_to_m_and_A].append(module)
+        else:
+            dict_of_lists_of_responsibilities_A[rank_alloc_to_m_and_A] = [module]
+            
+        if rank_alloc_to_m_and_G in dict_of_lists_of_responsibilities_G:
+            dict_of_lists_of_responsibilities_G[rank_alloc_to_m_and_G].append(module)
+        else:
+            dict_of_lists_of_responsibilities_G[rank_alloc_to_m_and_G] = [module]
+    ##### Return
+    ### note that the gpu_rank (keys) to dictionaries are TENSORS rather than typical int: we need to ammend remainig code to deal with it
+    return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G#, allocation_tensor_for_ranks#, tensor_sumtimes_for_each_module
+
+
 def optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G):
     # returns the most optimal possible allocation given the desired num workes and the comp times for A and G modules
     # return type is a tupe (list_a, list_g) where for each module-KFCTOR-type pair we say which worker will be allocated ot it
@@ -209,7 +260,7 @@ if __name__ == '__main__': ### testing
     
     # realisitc values from my VGG16_bn with less ooling
     """
-    computation_time_for_A = [2305**2, 4609**2 ,28**2, 577**2, 1153**2, 4609**2, 16385**2, 2049*82]
+    computation_time_for_A = [2305**2, 4609**2 ,28**2, 577**2, 1153**2, 4609**2, 16385**2, 2049**2]
     computation_time_for_G = [512**2, 512**2, 64**2, 64**2, 128**2, 512**2, 2048**2, 10**2]
     size_0_of_all_Kfactors_A = {'C1': 2305, 'C2': 4609 ,'C3' : 28, 'C4': 577, 'C5': 1153, 'C6': 4609, 'L1': 16385, 'L2': 2049}
     size_0_of_all_Kfactors_G = {'C1': 512, 'C2': 512, 'C3': 64, 'C4': 64, 'C5': 128, 'C6': 512, 'L1': 2048, 'L2': 10}
@@ -229,7 +280,7 @@ if __name__ == '__main__': ### testing
     print(optimal_most_allocation(10, computation_time_for_A, computation_time_for_G))
     
     print('TESTING outer function')
-    number_of_workers = 7
+    number_of_workers = 2
     
     target_rank_RSVD = 20 #220 # set to very low to avoid the x min(1,m/r) effect!
     print('Output:')
