@@ -141,10 +141,10 @@ def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_f
     
     #### translate tensor-format (and concantenated) allocation in list of module allocation
     #convert relevant quantities to numpy to avoid wrong keys (because they sit on certain GPUs)
-    #allocation_tensor_for_ranks = allocation_tensor_for_ranks.cpu().numpy()
+    allocation_tensor_for_ranks = allocation_tensor_for_ranks.cpu().numpy()
     #### initialize dictionaries
     dict_of_lists_of_responsibilities_A = {}; dict_of_lists_of_responsibilities_G = {}
-    for rank in torch.range(0, number_of_workers):
+    for rank in range(0, number_of_workers): # for rank in torch.range(0, number_of_workers):
         dict_of_lists_of_responsibilities_A[rank] = []; dict_of_lists_of_responsibilities_G[rank] = []
     # append
     for i, module in enumerate(modules_list):
@@ -156,7 +156,7 @@ def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_f
         dict_of_lists_of_responsibilities_G[rank_alloc_to_m_and_G].append(module)
     ##### Return
     ### note that the gpu_rank (keys) to dictionaries are TENSORS rather than typical int: we need to ammend remainig code to deal with it
-    return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G, tensor_sumtimes_for_each_module#, allocation_tensor_for_ranks#, tensor_sumtimes_for_each_module
+    return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G #, tensor_sumtimes_for_each_module#, allocation_tensor_for_ranks#, tensor_sumtimes_for_each_module
 
 
 def optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G):

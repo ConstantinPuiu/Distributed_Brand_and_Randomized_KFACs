@@ -99,6 +99,7 @@ class R_KFACOptimizer(optim.Optimizer):
         self.dist_comm_for_layers_debugger = False
         self.dist_debugger_testing_leanness_thing = False
         self.debugger_rsvd_adaptive_rank = False
+        self.verbose_work_realloc = False
 
         ### R-KFAC specific or introduced with RKFAC for te 1st time
         #rsvd_params
@@ -297,8 +298,9 @@ class R_KFACOptimizer(optim.Optimizer):
         self.modules_for_this_rank_A = self.modules_for_this_rank_G = fct_split_list_of_modules(self.modules, self.world_size)
         # call the same fct for A and G to get the same TRIVIAL split in both A and G: that boils down to being a module-split rather than a KFACTOR split
         # returns a dictionary of lists!
-        print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
-        print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
+        if self.verbose_work_realloc:
+            print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+            print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_cost))
     
     def time_measurement_alloc_for_lazy_A_or_G(self, m, Kfactor_type):
         if self.steps == self.TInv and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
@@ -718,9 +720,10 @@ class R_KFACOptimizer(optim.Optimizer):
             self.old_modules_for_this_rank_G = self.modules_for_this_rank_G
             self.modules_for_this_rank_A = new_modules_for_this_rank_A
             self.modules_for_this_rank_G = new_modules_for_this_rank_G
-            print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == {}, we reallocated work in proportion to squared-size'.format(self.steps))
-            print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
-            print(' We also had self.work_eff_alloc_with_time_measurement == {}'.format(self.work_eff_alloc_with_time_measurement))
+            if self.verbose_work_realloc:
+                print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == {}, we reallocated work in proportion to squared-size'.format(self.steps))
+                print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+                print(' We also had self.work_eff_alloc_with_time_measurement == {}'.format(self.work_eff_alloc_with_time_measurement))
         
         self._step(closure)
         self.steps += 1
