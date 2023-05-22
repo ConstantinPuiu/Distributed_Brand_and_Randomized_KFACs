@@ -141,10 +141,10 @@ def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_f
     
     #### translate tensor-format (and concantenated) allocation in list of module allocation
     #convert relevant quantities to numpy to avoid wrong keys (because they sit on certain GPUs)
-    allocation_tensor_for_ranks = allocation_tensor_for_ranks.numpy()
+    #allocation_tensor_for_ranks = allocation_tensor_for_ranks.cpu().numpy()
     #### initialize dictionaries
     dict_of_lists_of_responsibilities_A = {}; dict_of_lists_of_responsibilities_G = {}
-    for rank in range(0, number_of_workers):
+    for rank in torch.range(0, number_of_workers):
         dict_of_lists_of_responsibilities_A[rank] = []; dict_of_lists_of_responsibilities_G[rank] = []
     # append
     for i, module in enumerate(modules_list):
