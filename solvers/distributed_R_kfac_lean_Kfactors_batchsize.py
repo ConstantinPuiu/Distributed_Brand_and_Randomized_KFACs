@@ -695,12 +695,12 @@ class R_KFACOptimizer(optim.Optimizer):
                 #new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers = self.world_size, 
                 #                                                                measured_invtime_of_all_Kfactors_G = self.RSVD_measured_time_of_all_Kfactors_G,
                 #                                                                measured_invtime_of_all_Kfactors_A = self.RSVD_measured_time_of_all_Kfactors_A)
-                new_modules_for_this_rank_A, new_modules_for_this_rank_G, S = allocate_work_timebased_tensors(number_of_workers = self.world_size,
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_work_timebased_tensors(number_of_workers = self.world_size,
                                                                                         tensor_computation_time_for_A = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A, 
                                                                                         tensor_computation_time_for_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G, 
                                                                                         modules_list = self.modules)
-                print('\n Did time-measurement based allocation at rank = {} steps = {}\n'.format(self.rank, self.steps))
-                print('We have self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = {}\n self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = {}\n S = {}'.format(self.RSVD_measured_time_of_all_Kfactors_tensor_format_A,self.RSVD_measured_time_of_all_Kfactors_tensor_format_G, S))
+                #print('\n Did time-measurement based allocation at rank = {} steps = {}\n'.format(self.rank, self.steps))
+                #print('We have self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = {}\n self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = {}\n S = {}'.format(self.RSVD_measured_time_of_all_Kfactors_tensor_format_A,self.RSVD_measured_time_of_all_Kfactors_tensor_format_G, S))
             ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
             #### 1. delete what's in OLD but NOT in new
             for key_A_old in self.modules_for_this_rank_A[self.rank]:
