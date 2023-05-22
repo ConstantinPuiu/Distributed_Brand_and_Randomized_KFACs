@@ -159,6 +159,12 @@ class R_KFACOptimizer(optim.Optimizer):
         
     def _save_input(self, module, input):
         if torch.is_grad_enabled() and self.steps % self.TCov == 0:
+            ##### for size-based efficient allocation with tensor
+            if self.steps == 0:
+                if self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement == False: # and self.size_0_of_all_Kfactors_A_tensor == None:
+                    self.size_0_of_all_Kfactors_A_tensor = torch.zeros(len(self.modules), device = torch.device('cuda:{}'.format(self.rank)))
+                    self.size_0_of_all_Kfactors_G_tensor = 0 * self.size_0_of_all_Kfactors_A_tensor
+                
             if module in self.modules_for_this_rank_A[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
                 #is responsible for this aprticular module
                 # try concatenate reduction
@@ -178,9 +184,6 @@ class R_KFACOptimizer(optim.Optimizer):
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
                     if self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement == False:
                         # initialize size tensors
-                        if self.size_0_of_all_Kfactors_A_tensor == None:
-                            self.size_0_of_all_Kfactors_A_tensor = torch.zeros(len(self.modules), device = torch.device('cuda:{}'.format(self.rank)))
-                            self.size_0_of_all_Kfactors_G_tensor = 0 * self.size_0_of_all_Kfactors_A_tensor
                         self.size_0_of_all_Kfactors_A_tensor[ self.counter_for_tensor_of_size_A ] = aa.size(0)
                         self.counter_for_tensor_of_size_A += 1
                     self.nkfu_dict_a[module] = 1
