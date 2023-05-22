@@ -307,13 +307,13 @@ class R_KFACOptimizer(optim.Optimizer):
             # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
             # this is the time of a module we DO NOT RSVD on *THIS GPU, so set time to zero, for an allreduction to happen later which will ensure all GPUs will know the right times
             if Kfactor_type == 'A':
-                self.RSVD_measured_time_of_all_Kfactors_A[m] = 0
+                #self.RSVD_measured_time_of_all_Kfactors_A[m] = 0
                 self.RSVD_measured_time_of_all_Kfactors_tensor_format_A[self.counter_for_tensor_of_measured_time_A] = 0
                 self.counter_for_tensor_of_measured_time_A += 1
                 # tFor the tensor-form: he idea is that the modules are iterated over in a particualr, fixed, and the SAME (over GPU) order. 
                 # so it's sufficient to track the index
             elif Kfactor_type == 'G':
-                self.RSVD_measured_time_of_all_Kfactors_G[m] = 0
+                #self.RSVD_measured_time_of_all_Kfactors_G[m] = 0
                 self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[self.counter_for_tensor_of_measured_time_G] = 0
                 self.counter_for_tensor_of_measured_time_G += 1
             else:
@@ -363,7 +363,7 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.steps == self.TInv and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t2 = time.time()
-                self.RSVD_measured_time_of_all_Kfactors_A[m] = t2 - t1 # we save this to create the appropriate dictionary structure, and while the number is right,
+                #self.RSVD_measured_time_of_all_Kfactors_A[m] = t2 - t1 # we save this to create the appropriate dictionary structure, and while the number is right,
                 self.RSVD_measured_time_of_all_Kfactors_tensor_format_A[self.counter_for_tensor_of_measured_time_A] = t2 - t1
                 self.counter_for_tensor_of_measured_time_A += 1
                 # we will over-write it later (at the right time), with the main aim to get the zeros (of the not-inversed-on-this-GPU tensors ) to the appropriate measured values
@@ -413,7 +413,7 @@ class R_KFACOptimizer(optim.Optimizer):
             if self.steps == self.TInv  and self.work_alloc_propto_RSVD_cost and self.work_eff_alloc_with_time_measurement:
                 # if we are at the second time we do the inversion (more accurate number than the 1st, the first time has a big overhead whcih distrorts the costs, for some reason)
                 t2 = time.time()
-                self.RSVD_measured_time_of_all_Kfactors_G[m] = t2 - t1
+                #self.RSVD_measured_time_of_all_Kfactors_G[m] = t2 - t1
                 self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[self.counter_for_tensor_of_measured_time_G] = t2 - t1
                 self.counter_for_tensor_of_measured_time_G += 1
             
@@ -582,10 +582,10 @@ class R_KFACOptimizer(optim.Optimizer):
             handle.wait()
             
             ### NOW unpack the tensor used to communicate missing time measurements into the correct format of dicitonary (used for allocation)
-            for tensor_idx, m in enumerate(self.RSVD_measured_time_of_all_Kfactors_A.keys()):
-                # we can get away with doing 1 for loop over the keys of self.RSVD_measured_time_of_all_Kfactors_A because the ones of the G-pair are the same and in the same order
-                self.RSVD_measured_time_of_all_Kfactors_A[m] = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A[tensor_idx]
-                self.RSVD_measured_time_of_all_Kfactors_G[m] = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[tensor_idx]
+            #for tensor_idx, m in enumerate(self.RSVD_measured_time_of_all_Kfactors_A.keys()):
+            #    # we can get away with doing 1 for loop over the keys of self.RSVD_measured_time_of_all_Kfactors_A because the ones of the G-pair are the same and in the same order
+            #    self.RSVD_measured_time_of_all_Kfactors_A[m] = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A[tensor_idx]
+            #    self.RSVD_measured_time_of_all_Kfactors_G[m] = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G[tensor_idx]
         ######## END : Communicate missing elements of TIME MEASUREMENT dictionary ############
         
         # take the step and allreduce across evd's if the inverses were updated    
