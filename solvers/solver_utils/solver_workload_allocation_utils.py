@@ -140,21 +140,18 @@ def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_f
             tensor_sumtimes_for_each_module[ worker_to_allocate_to ] += time_value
     
     #### translate tensor-format (and concantenated) allocation in list of module allocation
+    #### initialize dictionaries
     dict_of_lists_of_responsibilities_A = {}; dict_of_lists_of_responsibilities_G = {}
+    for rank in range(0, number_of_workers):
+        dict_of_lists_of_responsibilities_A[rank] = []; dict_of_lists_of_responsibilities_G[rank] = []
+    # append
     for i, module in enumerate(modules_list):
         #### extract which rank is allocated to this module
         rank_alloc_to_m_and_A = allocation_tensor_for_ranks[i]
         rank_alloc_to_m_and_G = allocation_tensor_for_ranks[i + number_of_modules]
         ### append to the correct dicionaries
-        if rank_alloc_to_m_and_A in dict_of_lists_of_responsibilities_A:
-            dict_of_lists_of_responsibilities_A[rank_alloc_to_m_and_A].append(module)
-        else:
-            dict_of_lists_of_responsibilities_A[rank_alloc_to_m_and_A] = [module]
-            
-        if rank_alloc_to_m_and_G in dict_of_lists_of_responsibilities_G:
-            dict_of_lists_of_responsibilities_G[rank_alloc_to_m_and_G].append(module)
-        else:
-            dict_of_lists_of_responsibilities_G[rank_alloc_to_m_and_G] = [module]
+        dict_of_lists_of_responsibilities_A[rank_alloc_to_m_and_A].append(module)
+        dict_of_lists_of_responsibilities_G[rank_alloc_to_m_and_G].append(module)
     ##### Return
     ### note that the gpu_rank (keys) to dictionaries are TENSORS rather than typical int: we need to ammend remainig code to deal with it
     return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G, tensor_sumtimes_for_each_module#, allocation_tensor_for_ranks#, tensor_sumtimes_for_each_module
