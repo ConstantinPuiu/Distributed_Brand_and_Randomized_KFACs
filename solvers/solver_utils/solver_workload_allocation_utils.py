@@ -129,7 +129,7 @@ def allocate_sizebased_tensor_raw(number_of_workers, size_0_of_all_Kfactors_A_te
         tensor_computation_time_for_G = torch.min(size_0_of_all_Kfactors_G_tensor, size_0_of_all_Kfactors_G_tensor**2/target_rank_RSVD)
     elif cost_type == 'RSVDcpu':
         tensor_computation_time_for_A = torch.min(size_0_of_all_Kfactors_A_tensor**2, size_0_of_all_Kfactors_A_tensor**3/target_rank_RSVD)
-        tensor_computation_time_for_G = torch.min(size_0_of_all_Kfactors_G_tensor, size_0_of_all_Kfactors_G_tensor**2/target_rank_RSVD)**2
+        tensor_computation_time_for_G = torch.min(size_0_of_all_Kfactors_G_tensor**2, size_0_of_all_Kfactors_G_tensor**3/target_rank_RSVD)
     elif cost_type == 'Bgpu':
         raise NotImplementedError('for function allocate_sizebased_tensor_raw cost type = {} NOT IMPLEMENTED YET'.format(cost_type))
         #tensor_computation_time_for_A = size_0_of_all_Kfactors_A_tensor
