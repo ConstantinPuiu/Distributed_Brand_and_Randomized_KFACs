@@ -157,7 +157,7 @@ def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_f
             dict_of_lists_of_responsibilities_G[rank_alloc_to_m_and_G] = [module]
     ##### Return
     ### note that the gpu_rank (keys) to dictionaries are TENSORS rather than typical int: we need to ammend remainig code to deal with it
-    return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G#, allocation_tensor_for_ranks#, tensor_sumtimes_for_each_module
+    return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G, tensor_sumtimes_for_each_module#, allocation_tensor_for_ranks#, tensor_sumtimes_for_each_module
 
 
 def optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G):

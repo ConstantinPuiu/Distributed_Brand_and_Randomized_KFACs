@@ -8,12 +8,12 @@ import torch.distributed as dist
 import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
 #sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
-
+#allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_for_A, tensor_computation_time_for_G, modules_list)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import (ComputeCovA, ComputeCovG)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping)
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time)
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time, allocate_work_timebased_tensors)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank
 
 class R_KFACOptimizer(optim.Optimizer):
@@ -690,10 +690,15 @@ class R_KFACOptimizer(optim.Optimizer):
                                                                                 size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
                                                                                 target_rank_RSVD = self.rsvd_rank)
             else: #if self.work_eff_alloc_with_time_measurement:
-                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers = self.world_size, 
-                                                                                measured_invtime_of_all_Kfactors_G = self.RSVD_measured_time_of_all_Kfactors_G,
-                                                                                measured_invtime_of_all_Kfactors_A = self.RSVD_measured_time_of_all_Kfactors_A)
+                #new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers = self.world_size, 
+                #                                                                measured_invtime_of_all_Kfactors_G = self.RSVD_measured_time_of_all_Kfactors_G,
+                #                                                                measured_invtime_of_all_Kfactors_A = self.RSVD_measured_time_of_all_Kfactors_A)
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G, S = allocate_work_timebased_tensors(number_of_workers = self.world_size,
+                                                                                        tensor_computation_time_for_A = self.RSVD_measured_time_of_all_Kfactors_tensor_format_A, 
+                                                                                        tensor_computation_time_for_G = self.RSVD_measured_time_of_all_Kfactors_tensor_format_G, 
+                                                                                        modules_list = self.modules)
                 print('\n Did time-measurement based allocation at rank = {} steps = {}\n'.format(self.rank, self.steps))
+                print('We have self.RSVD_measured_time_of_all_Kfactors_tensor_format_A = {}\n self.RSVD_measured_time_of_all_Kfactors_tensor_format_G = {}\n S = {}'.format(self.RSVD_measured_time_of_all_Kfactors_tensor_format_A,self.RSVD_measured_time_of_all_Kfactors_tensor_format_G, S))
             ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
             #### 1. delete what's in OLD but NOT in new
             for key_A_old in self.modules_for_this_rank_A[self.rank]:
