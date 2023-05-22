@@ -64,8 +64,8 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
         #To avoid large numbers, we divide by r, so m^2 and m^3/r are comapred
         if type_of_cost == 'EVD':
             computation_time_for_A.append(size_0_of_all_Kfactors_A[key]**3)
-        elif type_of_cost == 'RSVD':
-            computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_) * size_0_of_all_Kfactors_A[key]**2)
+        elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
+            computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_) * size_0_of_all_Kfactors_A[key])#**2)
         elif type_of_cost == 'B':
             if size_0_of_all_Kfactors_A[key] / (target_rank_ + batch_size_) > 1: # if we perform a true B-update fr this layer
                 computation_time_for_A.append( size_0_of_all_Kfactors_A[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
@@ -82,8 +82,8 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
         #To avoid large numbers, we divide by r, so m^2 and m^3/r are comapred
         if type_of_cost == 'EVD':
             computation_time_for_G.append(size_0_of_all_Kfactors_G[key]**3)
-        elif type_of_cost == 'RSVD':
-            computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key]**2)
+        elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
+            computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key])#**2)
         elif type_of_cost == 'B':
             # in this case target_rank_ is actually target_rank_B + N_BS but leaving same variable name for simplicity
             # diving cost by (target_rank_ + batch_size_) to make numbers more manageable (arguably not needed)
