@@ -140,6 +140,8 @@ def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_f
             tensor_sumtimes_for_each_module[ worker_to_allocate_to ] += time_value
     
     #### translate tensor-format (and concantenated) allocation in list of module allocation
+    #convert relevant quantities to numpy to avoid wrong keys (because they sit on certain GPUs)
+    allocation_tensor_for_ranks = allocation_tensor_for_ranks.numpy()
     #### initialize dictionaries
     dict_of_lists_of_responsibilities_A = {}; dict_of_lists_of_responsibilities_G = {}
     for rank in range(0, number_of_workers):
