@@ -112,6 +112,38 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
     
     return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G
 
+def allocate_RSVD_inversion_work_same_fixed_r_tensor(number_of_workers, size_0_of_all_Kfactors_A_tensor, 
+                                                     size_0_of_all_Kfactors_G_tensor, target_rank_RSVD, modules_list):
+    return allocate_sizebased_tensor_raw(number_of_workers = number_of_workers,
+                                         size_0_of_all_Kfactors_A_tensor = size_0_of_all_Kfactors_A_tensor, 
+                                         size_0_of_all_Kfactors_G_tensor = size_0_of_all_Kfactors_G_tensor, 
+                                         target_rank_RSVD = target_rank_RSVD, modules_list = modules_list,
+                                         cost_type = 'RSVDgpu')
+
+def allocate_sizebased_tensor_raw(number_of_workers, size_0_of_all_Kfactors_A_tensor, 
+                                  size_0_of_all_Kfactors_G_tensor, target_rank_RSVD, modules_list,
+                                  cost_type):
+    #### get TIME(cost) estimated based on size
+    if cost_type == 'RSVDgpu':
+        tensor_computation_time_for_A = torch.min(size_0_of_all_Kfactors_A_tensor, size_0_of_all_Kfactors_A_tensor**2/target_rank_RSVD)
+        tensor_computation_time_for_G = torch.min(size_0_of_all_Kfactors_G_tensor, size_0_of_all_Kfactors_G_tensor**2/target_rank_RSVD)
+    elif cost_type == 'RSVDcpu':
+        tensor_computation_time_for_A = torch.min(size_0_of_all_Kfactors_A_tensor**2, size_0_of_all_Kfactors_A_tensor**3/target_rank_RSVD)
+        tensor_computation_time_for_G = torch.min(size_0_of_all_Kfactors_G_tensor, size_0_of_all_Kfactors_G_tensor**2/target_rank_RSVD)**2
+    elif cost_type == 'Bgpu':
+        raise NotImplementedError('for function allocate_sizebased_tensor_raw cost type = {} NOT IMPLEMENTED YET'.format(cost_type))
+        #tensor_computation_time_for_A = size_0_of_all_Kfactors_A_tensor
+        #tensor_computation_time_for_G = size_0_of_all_Kfactors_G_tensor
+    else:
+        raise NotImplementedError('for function allocate_sizebased_tensor_raw cost type = {} NOT IMPLEMENTED'.format(cost_type))
+    
+    ### call time_based function  (time is now ESTIMATED not measured)
+    return allocate_work_timebased_tensors(number_of_workers = number_of_workers, 
+                                           tensor_computation_time_for_A = tensor_computation_time_for_A,
+                                           tensor_computation_time_for_G = tensor_computation_time_for_G,
+                                           modules_list = modules_list)
+
+
 def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_for_A, tensor_computation_time_for_G, modules_list):
     # number_of_workers - self explanatory
     # tensor_computation_time_for_A - tensor format, the 1st element is the time for Kfactor A of the 1st module in modules_list

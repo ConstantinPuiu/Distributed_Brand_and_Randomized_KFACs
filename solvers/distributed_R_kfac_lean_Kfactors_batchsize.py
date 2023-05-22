@@ -13,7 +13,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping)
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time, allocate_work_timebased_tensors)
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time, allocate_work_timebased_tensors, allocate_RSVD_inversion_work_same_fixed_r_tensor)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank
 
 class R_KFACOptimizer(optim.Optimizer):
@@ -112,6 +112,8 @@ class R_KFACOptimizer(optim.Optimizer):
         self.work_eff_alloc_with_time_measurement = work_eff_alloc_with_time_measurement
         self.size_0_of_all_Kfactors_A = {} #once obtained, save for later usage
         self.size_0_of_all_Kfactors_G = {} #once obtained, save for later usage
+        self.size_0_of_all_Kfactors_A_tensor = None; self.size_0_of_all_Kfactors_G_tensor = None
+        self.counter_for_tensor_of_size_A = 0; self.counter_for_tensor_of_size_G = 0
         self.modules_for_this_rank_A = {} # the output of work-schedulling across GPUs for A KFACTORS
         self.modules_for_this_rank_G = {} # the output of work-schedulling across GPUs for G KFACTORS
         if work_alloc_propto_RSVD_cost and work_eff_alloc_with_time_measurement:
@@ -174,6 +176,13 @@ class R_KFACOptimizer(optim.Optimizer):
                 if self.steps == 0: # Initialize buffers
                     self.m_aa[module] = (1 - self.stat_decay) * aa + 0
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
+                    if self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement == False:
+                        # initialize size tensors
+                        if self.size_0_of_all_Kfactors_A_tensor == None:
+                            self.size_0_of_all_Kfactors_A_tensor = torch.zeros(len(self.modules), device = torch.device('cuda:{}'.format(self.rank)))
+                            self.size_0_of_all_Kfactors_G_tensor = 0 * self.size_0_of_all_Kfactors_A_tensor
+                        self.size_0_of_all_Kfactors_A_tensor[ self.counter_for_tensor_of_size_A ] = aa.size(0)
+                        self.counter_for_tensor_of_size_A += 1
                     self.nkfu_dict_a[module] = 1
                     if self.adaptable_rsvd_rank == True:
                         self.aa_for_reinit[module] = aa
@@ -215,6 +224,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     # save the size
                     self.size_of_missing_m_aa[module] = aa.size(0) # this dict also tells us which modules are missing: might delete to avoid redundancy later
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
+                    if self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement == False:
+                        self.size_0_of_all_Kfactors_A_tensor[ self.counter_for_tensor_of_size_A ] = aa.size(0)
+                        self.counter_for_tensor_of_size_A += 1
                     # initialize required EVD quantities correctly as zero 
                     #(could do this in the inversion funciton but it's best done here to avoid using torch.zeros)
                     actual_rank = min(aa.shape[0], self.rsvd_rank)
@@ -240,6 +252,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     # self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
                     self.m_gg[module] = (1 - self.stat_decay) * gg + 0
                     self.size_0_of_all_Kfactors_G[module] = gg.size(0)
+                    if self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement == False:
+                        self.size_0_of_all_Kfactors_G_tensor[ self.counter_for_tensor_of_size_G ] = gg.size(0)
+                        self.counter_for_tensor_of_size_G += 1
                     self.nkfu_dict_g[module] = 1
                     if self.adaptable_rsvd_rank == True:
                         self.gg_for_reinit[module] = gg
@@ -263,6 +278,9 @@ class R_KFACOptimizer(optim.Optimizer):
                     # save the size
                     self.size_of_missing_m_gg[module] = gg.size(0)
                     self.size_0_of_all_Kfactors_G[module] = gg.size(0)
+                    if self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement == False:
+                        self.size_0_of_all_Kfactors_G_tensor[ self.counter_for_tensor_of_size_G ] = gg.size(0)
+                        self.counter_for_tensor_of_size_G += 1
                     # initialize required EVD quantities correctly as zero 
                     #(could do this in the inversion funciton but it's best done here to avoid using torch.zeros)
                     actual_rank = min(gg.shape[0], self.rsvd_rank)
@@ -687,10 +705,14 @@ class R_KFACOptimizer(optim.Optimizer):
             # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
             # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
             if not self.work_eff_alloc_with_time_measurement:
-                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
-                                                                                size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
-                                                                                size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
-                                                                                target_rank_RSVD = self.rsvd_rank)
+                #new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+                #                                                                size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
+                #                                                                size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
+                #                                                                target_rank_RSVD = self.rsvd_rank)
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r_tensor(number_of_workers = self.world_size, 
+                                                                                size_0_of_all_Kfactors_A_tensor = self.size_0_of_all_Kfactors_A_tensor,
+                                                                                size_0_of_all_Kfactors_G_tensor = self.size_0_of_all_Kfactors_G_tensor,
+                                                                                target_rank_RSVD = self.rsvd_rank, modules_list = self.modules)
             else: #if self.work_eff_alloc_with_time_measurement:
                 #new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers = self.world_size, 
                 #                                                                measured_invtime_of_all_Kfactors_G = self.RSVD_measured_time_of_all_Kfactors_G,
