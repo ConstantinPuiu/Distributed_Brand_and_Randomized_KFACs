@@ -8,7 +8,7 @@ def allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers, size
                                                                   size_0_of_all_Kfactors_A, 
                                                                   target_rank_ = target_rank_RSVD,
                                                                   batch_size_ = batch_size, 
-                                                                  type_of_cost = 'RSVD') 
+                                                                  type_of_cost = 'B') 
 
 def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
@@ -71,7 +71,11 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
                 computation_time_for_A.append( size_0_of_all_Kfactors_A[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
             else: # else, we perform an rsvd
                 # here we're assuming the rsvd target rank and the brand target rank are the same
-                computation_time_for_A.append( min(target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2 / (target_rank_ + batch_size_) ) # (target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2
+                computation_time_for_A.append( min(target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key] / (target_rank_ + batch_size_) ) # (target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2
+                # the reasn we don't use  size_0_of_all_Kfactors_G[key]**2 in the line just above is because we assume (target_rank_ + batch_size_)  are very low 
+                #(which is always the case tbh!) AND in that situation the cost scales linearly rather than quadratically on GPUs 
+                #(a quadratic scaling is kept down to linear for small sizes on GPU due to efficient use of many cores, 
+                #- but eventually the quadratic scaling kicks in: we observe this happens at around 400-800 size for RSVD - so we can use 256 + 220 as being in the linear regime with minimal problems)
         
         elif type_of_cost == 'time_given_instead_of_size':
             computation_time_for_A.append(size_0_of_all_Kfactors_A[key])
