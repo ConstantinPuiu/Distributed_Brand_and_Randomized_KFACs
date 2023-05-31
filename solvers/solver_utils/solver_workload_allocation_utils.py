@@ -143,7 +143,7 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
             computation_time_for_G.append(size_0_of_all_Kfactors_G[key]**3)
         elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
             total_rank_ = target_rank_ + oversampling_to_rank_
-            computation_time_for_A.append(predict_comptime_from_size_and_targrank(size_0_of_all_Kfactors_G[key], total_rank_))#**2)
+            computation_time_for_G.append(predict_comptime_from_size_and_targrank(size_0_of_all_Kfactors_G[key], total_rank_))#**2)
             # old and inaccurate below
             #computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key])#**2)
         elif type_of_cost == 'B':
