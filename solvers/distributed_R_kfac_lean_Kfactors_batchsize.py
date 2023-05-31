@@ -711,7 +711,8 @@ class R_KFACOptimizer(optim.Optimizer):
                 new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
                                                                                 size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
                                                                                 size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
-                                                                                target_rank_RSVD = self.rsvd_rank)
+                                                                                target_rank_RSVD = self.rsvd_rank,
+                                                                                oversampling_to_rank = self.oversampling_parameter)
                 #new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r_tensor(number_of_workers = self.world_size, 
                 #                                                                size_0_of_all_Kfactors_A_tensor = self.size_0_of_all_Kfactors_A_tensor,
                 #                                                                size_0_of_all_Kfactors_G_tensor = self.size_0_of_all_Kfactors_G_tensor,

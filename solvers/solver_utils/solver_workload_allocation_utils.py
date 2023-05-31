@@ -7,14 +7,16 @@ def allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers, size
                                                                   size_0_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A, 
                                                                   target_rank_ = target_rank_RSVD,
+                                                                  oversampling_to_rank_ = 20, 
                                                                   batch_size_ = batch_size, 
                                                                   type_of_cost = 'B') 
 
-def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD):
+def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD, oversampling_to_rank = 20):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
                                                                   size_0_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A, 
                                                                   target_rank_ = target_rank_RSVD, 
+                                                                  oversampling_to_rank_ = oversampling_to_rank, # not required 
                                                                   batch_size_ = None, #not required
                                                                   type_of_cost = 'RSVD')
 
@@ -23,6 +25,7 @@ def allocate_EVD_inversion_work(number_of_workers, size_0_of_all_Kfactors_G, siz
                                                                   size_0_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A, 
                                                                   target_rank_ = None, #not required
+                                                                  oversampling_to_rank_ = None, #not required
                                                                   batch_size_ = None, #not required
                                                                   type_of_cost = 'EVD')
 
@@ -36,7 +39,56 @@ def allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers, measured_invti
 
 # end wrappers ###############
 
-def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_, batch_size_, type_of_cost):
+###########################################################################################################################
+####### Helper functions for: predicting time based on size with measurements nd more sophssticated computation ###########
+###########################################################################################################################
+theta_results_dict = {30: [0.00255482, 0.01016938, 0.05377455],
+                      80: [0.00499274, 0.01908004, 0.14648095],
+                    130: [0.00711607, 0.02932301, 0.26814728],
+                    180: [0.00887165, 0.04546348, 0.30530023],
+                    240: [0.02178314, 0.03073283, 0.39171789],
+                    370: [0.01602652, 0.12918453, 0.54051409],
+                    520: [0.02564055, 0.10353079, 0.98908084]
+                    } # these numbers were obtained by linear regressions on features: 1, size, size^2 - with data measured on V100-SXM2 GPU
+                    # different GPUs give different numbers and it is recommended the user does his own measurements and linear reg and replaces the numbers here for their own GPU
+# the dict keys are TOTAL rank (used oversampling of 20 in test but it doesn t really matter!)
+
+# instead of using the dictionary with interpolation we linearly-regressed again keys = target rank vs theta[i], for all i \in {0,1,2} and use that
+omega_0 = [2.20764030e-03, 4.61496825e-05] # recoveringtheta_0_params
+omega_1 = [0.00099798, 0.00023258] # recoveringtheta_1_params
+omega_2 = [-0.0058709, 0.00176523] # recoveringtheta_2_params
+
+def pred_theta_0_from_omega(total_rank):
+    return omega_0[0] + total_rank *omega_0[1]
+def pred_theta_1_from_omega(total_rank):
+    return omega_1[0] + total_rank * omega_1[1]
+def pred_theta_2_from_omega(total_rank):
+    return omega_2[0] + total_rank *omega_2[1]
+# then, after we recover theta based on target rank we get the cpu time based on size and theta.
+
+def predict_comptime_from_size_and_targrank(size, total_rank):
+    if total_rank < 30: # make sure we fall within the 30,520 interval
+        total_rank = 30
+    elif total_rank > 520:
+        total_rank = 520
+    
+    # first we predict the lin-reg parameters of (size, time) which are diffefrent for each target rank
+    thetta_0 = pred_theta_0_from_omega(total_rank)
+    thetta_1 = pred_theta_1_from_omega(total_rank)
+    thetta_2 = pred_theta_2_from_omega(total_rank)
+    
+    #### then given these parameters we predict the cpu time based on size and return
+    def predict_time_from_pred_theta_and_size(sizze):
+        sizze = sizze / 33000
+        return thetta_0 + thetta_1 * sizze + thetta_2 *sizze **2
+    
+    return predict_time_from_pred_theta_and_size(size)
+##########################################################################################################################
+####### END: Helper functions for: predicting time based on size with measurements nd more sophssticated computation #####
+##########################################################################################################################
+
+
+def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_, oversampling_to_rank_, batch_size_, type_of_cost):
     #### input:
     #number_of_workers = number of total workers we have ie worldsize
     # size_0_of_all_Kfactors_G - a dictionary where the key is the module, and the value is the size[0] of GG^T K-factor for that module
@@ -65,7 +117,10 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
         if type_of_cost == 'EVD':
             computation_time_for_A.append(size_0_of_all_Kfactors_A[key]**3)
         elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
-            computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_) * size_0_of_all_Kfactors_A[key])#**2)
+            total_rank_ = target_rank_ + oversampling_to_rank_
+            computation_time_for_A.append(predict_comptime_from_size_and_targrank(size_0_of_all_Kfactors_A[key], total_rank_))#**2)
+            # old and inaccurate below
+            #computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_) * size_0_of_all_Kfactors_A[key])#**2)
         elif type_of_cost == 'B':
             if size_0_of_all_Kfactors_A[key] / (target_rank_ + batch_size_) > 1: # if we perform a true B-update fr this layer
                 computation_time_for_A.append( size_0_of_all_Kfactors_A[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
@@ -87,7 +142,10 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
         if type_of_cost == 'EVD':
             computation_time_for_G.append(size_0_of_all_Kfactors_G[key]**3)
         elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
-            computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key])#**2)
+            total_rank_ = target_rank_ + oversampling_to_rank_
+            computation_time_for_A.append(predict_comptime_from_size_and_targrank(size_0_of_all_Kfactors_G[key], total_rank_))#**2)
+            # old and inaccurate below
+            #computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key])#**2)
         elif type_of_cost == 'B':
             # in this case target_rank_ is actually target_rank_B + N_BS but leaving same variable name for simplicity
             # diving cost by (target_rank_ + batch_size_) to make numbers more manageable (arguably not needed)
