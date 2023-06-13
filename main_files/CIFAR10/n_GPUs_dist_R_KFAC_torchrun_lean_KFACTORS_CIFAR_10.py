@@ -232,7 +232,8 @@ def main(world_size, args):
             ## debug negative loss only
             #if y not in [0,1,2,3,4,5,6,7,8,9]: # checing for data being corrupted? (it wasn't this it was forgetting the softmax)
             #    print('rank = {} has encountered WEIRD label yi = {}'.format(y))
-            print('rank = {} at step ={} has loss.item() = {}'.format(rank,optimizer.steps,loss.item()))
+            
+            #print('rank = {} at step ={} has loss.item() = {}'.format(rank,optimizer.steps,loss.item()))
 
             loss.backward()
             if jdx % 150 == 0 and epoch == n_epochs - 1:
