@@ -40,6 +40,7 @@ class B_KFACOptimizer(optim.Optimizer):
                  clip_type = 'non_standard',
                  brand_r_target_excess = 0,
                  brand_update_multiplier_to_TCov = 1,
+                 truncate_before_inversion = False,
                  work_alloc_propto_RSVD_and_B_cost = True):
         
         if momentum < 0.0:
@@ -118,6 +119,7 @@ class B_KFACOptimizer(optim.Optimizer):
         self.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov
         self.sqr_1_minus_stat_decay = (1 - stat_decay)**(0.5) # to avoid recomputations
         self.batch_size = None
+        self.truncate_before_inversion = truncate_before_inversion
         #######################################################################
         
         #### for tracking which modules are on Brand track and whicha ren't

@@ -145,6 +145,12 @@ def main(world_size, args):
     else:
         work_alloc_propto_RSVD_and_B_cost = True
     # ====================================================
+        
+    ######## added to control whether we B-truncate before or after inversion ###########
+    if args.truncate_before_inversion == 0:
+        truncate_before_inversion = False
+    else:
+        truncate_before_inversion = True
     
     ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
     # dict to have schedule! eys are epochs: key map to frequency, stuff only changes at keys and then stays constant.
@@ -196,6 +202,7 @@ def main(world_size, args):
                                 clip_type = clip_type,
                                 brand_r_target_excess = brand_r_target_excess,
                                 brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
+                                truncate_before_inversion = truncate_before_inversion,
                                 work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
@@ -275,6 +282,9 @@ def parse_args():
     ### added to deal with more efficient wokr allocaiton
     #
     parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=int, default=1, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set to any nonzero if yes. we use int rather than bool as argparse works badly with bool!' ) 
+    
+    #### added to allow for B-truncating just before inversion as well
+    parser.add_argument('--truncate_before_inversion', type=int, default=0, help='Do we want to B-truncate just before inversion (more speed less accuracy) If so set to 1 (or anything other than 0). Standard way to deal with bools wiht buggy argparser that only work correctly wiht numbers!' ) 
     
     ### for selecting net type
     parser.add_argument('--net_type', type=str, default = 'Conv', help = 'type of net: Conv (gives VGG16_bn less maxpool) or FC (gives an adhoc FC net)' )
