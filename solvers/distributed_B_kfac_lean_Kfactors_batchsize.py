@@ -97,7 +97,7 @@ class B_KFACOptimizer(optim.Optimizer):
         self.dist_comm_for_layers_debugger = False
         self.dist_debugger_testing_leanness_thing = False
         self.debug_size_for_B = False
-        self.debugger_rescheduler_timing = True
+        self.debugger_rescheduler_timing = False
         
         ### R-KFAC specific or introduced with RKFAC for te 1st time
         #rsvd_params
