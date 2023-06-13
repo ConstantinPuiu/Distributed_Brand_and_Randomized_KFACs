@@ -14,7 +14,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subroutine import Brand_S_update
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subroutine import Brand_S_update, Brand_S_update_truncate_before_invapplic
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping, RSVD_lowrank)
 
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
@@ -120,6 +120,10 @@ class B_KFACOptimizer(optim.Optimizer):
         self.sqr_1_minus_stat_decay = (1 - stat_decay)**(0.5) # to avoid recomputations
         self.batch_size = None
         self.truncate_before_inversion = truncate_before_inversion
+        if truncate_before_inversion:
+            self.Brand_S_update = Brand_S_update_truncate_before_invapplic
+        else:
+            self.Brand_S_update = Brand_S_update
         #######################################################################
         
         #### for tracking which modules are on Brand track and whicha ren't
@@ -187,13 +191,14 @@ class B_KFACOptimizer(optim.Optimizer):
                             #print('\n Updating AA^T: we have bias in linear layer!')
                             A = torch.cat([A, A.new(A.size(0), 1).fill_(1)], 1).T
         
-                        self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
+                        self.d_a[module], self.Q_a[module] = self.Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
                                                                             A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
-                                                                            device = torch.device('cuda:{}'.format(self.rank)),
-                                                                            truncate_before_inversion = self.truncate_before_inversion)
+                                                                            device = torch.device('cuda:{}'.format(self.rank)))
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
-                        actual_rank = self.rsvd_rank + input[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        actual_rank = self.brand_r_target + (not self.truncate_before_inversion) * input[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        # (not self.truncate_before_inversion) is FALSE when we truncate after inversion. in that case we want TRUE * number to get number
+                        # we aso have that False * number = 0
                         self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                             
@@ -217,10 +222,9 @@ class B_KFACOptimizer(optim.Optimizer):
                         #print('\n Updating AA^T: we have bias in linear layer!')
                         A = torch.cat([A, A.new(A.size(0), 1).fill_(1)], 1).T
     
-                    self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
+                    self.d_a[module], self.Q_a[module] = self.Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
                                                                         A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
-                                                                        device = torch.device('cuda:{}'.format(self.rank)),
-                                                                        truncate_before_inversion = self.truncate_before_inversion)
+                                                                        device = torch.device('cuda:{}'.format(self.rank)))
                     self.nkfu_dict_a[module] += 1
                     ########### END BRAND UPDATE #########################
             elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
@@ -283,14 +287,15 @@ class B_KFACOptimizer(optim.Optimizer):
                         else:
                             G = grad_output[0].data.T / (batch_size + 0.0)**0.5
                     
-                        self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
+                        self.d_g[module], self.Q_g[module] = self.Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
                                                                             A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
-                                                                            device = torch.device('cuda:{}'.format(self.rank)),
-                                                                            truncate_before_inversion = self.truncate_before_inversion)
+                                                                            device = torch.device('cuda:{}'.format(self.rank)))
                         
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
-                        actual_rank = self.rsvd_rank + grad_output[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        actual_rank = self.brand_r_target + (not self.truncate_before_inversion) * grad_output[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        # (not self.truncate_before_inversion) is FALSE when we truncate after inversion. in that case we want TRUE * number to get number
+                        # we aso have that False * number = 0
                         self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                             
@@ -313,10 +318,9 @@ class B_KFACOptimizer(optim.Optimizer):
                     else:
                         G = grad_output[0].data.T / (batch_size + 0.0)**0.5
                 
-                    self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
+                    self.d_g[module], self.Q_g[module] = self.Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
                                                                         A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
-                                                                        device = torch.device('cuda:{}'.format(self.rank)),
-                                                                        truncate_before_inversion = self.truncate_before_inversion)
+                                                                        device = torch.device('cuda:{}'.format(self.rank)))
                     self.nkfu_dict_g[module] += 1
                     ########### END BRAND UPDATE #########################
             elif module in self.CaSL_modules_for_this_rank_G[self.rank]:
