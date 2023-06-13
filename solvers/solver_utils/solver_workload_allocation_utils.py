@@ -90,6 +90,22 @@ def predict_RSVD_comptime_from_size_and_targrank(size, total_rank):
 ##########################################################################################################################
 
 
+#############################################################################################################################
+####### Helper functions for: predicting B-updt time based on size with measurements nd more sophssticated computation ######
+#############################################################################################################################
+def predict_B_comptime_from_size_and_targrank(size, starting_rank, incoming_rank):
+    # only did the regression for starting rank 220 (this is also the target rank) and 256 incoming rank (also the batchsize)
+    # so it's hardcoded for now as in the next 2 lines, will change in the future
+    if size < starting_rank + incoming_rank: # then return the RSVD time prediciton: because that's what's it doing!
+        return predict_RSVD_comptime_from_size_and_targrank(size, total_rank = starting_rank + incoming_rank)
+    
+    # (else):
+    theta_0 = 0.02012786; theta_1 =  0.01055792 # (regression based on measurements with div_data_factor = 33000, 220 starting rank and 256 incoming rank)
+    return theta_0 + theta_1 * size / 33000
+#################################################################################################################################
+####### END Helper functions for: predicting B-updt time based on size with measurements nd more sophssticated computation ######
+#################################################################################################################################
+
 def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_, oversampling_to_rank_, batch_size_, type_of_cost):
     #### input:
     #number_of_workers = number of total workers we have ie worldsize
@@ -124,15 +140,16 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
             # old and inaccurate below
             #computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_) * size_0_of_all_Kfactors_A[key])#**2)
         elif type_of_cost == 'B':
-            if size_0_of_all_Kfactors_A[key] / (target_rank_ + batch_size_) > 1: # if we perform a true B-update fr this layer
-                computation_time_for_A.append( size_0_of_all_Kfactors_A[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
-            else: # else, we perform an rsvd
-                # here we're assuming the rsvd target rank and the brand target rank are the same
-                computation_time_for_A.append( min(target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key] / (target_rank_ + batch_size_) ) # (target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2
-                # the reasn we don't use  size_0_of_all_Kfactors_G[key]**2 in the line just above is because we assume (target_rank_ + batch_size_)  are very low 
-                #(which is always the case tbh!) AND in that situation the cost scales linearly rather than quadratically on GPUs 
-                #(a quadratic scaling is kept down to linear for small sizes on GPU due to efficient use of many cores, 
-                #- but eventually the quadratic scaling kicks in: we observe this happens at around 400-800 size for RSVD - so we can use 256 + 220 as being in the linear regime with minimal problems)
+            computation_time_for_A.append(predict_B_comptime_from_size_and_targrank(size = size_0_of_all_Kfactors_A[key], starting_rank = 220, incoming_rank = 256))
+            #if size_0_of_all_Kfactors_A[key] / (target_rank_ + batch_size_) > 1: # if we perform a true B-update fr this layer
+            #    computation_time_for_A.append( size_0_of_all_Kfactors_A[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
+            #else: # else, we perform an rsvd
+            #    # here we're assuming the rsvd target rank and the brand target rank are the same
+            #    computation_time_for_A.append( min(target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key] / (target_rank_ + batch_size_) ) # (target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2
+            #    # the reasn we don't use  size_0_of_all_Kfactors_G[key]**2 in the line just above is because we assume (target_rank_ + batch_size_)  are very low 
+            #    #(which is always the case tbh!) AND in that situation the cost scales linearly rather than quadratically on GPUs 
+            #    #(a quadratic scaling is kept down to linear for small sizes on GPU due to efficient use of many cores, 
+            #    #- but eventually the quadratic scaling kicks in: we observe this happens at around 400-800 size for RSVD - so we can use 256 + 220 as being in the linear regime with minimal problems)
         
         elif type_of_cost == 'time_given_instead_of_size':
             computation_time_for_A.append(size_0_of_all_Kfactors_A[key])
@@ -149,13 +166,14 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
             # old and inaccurate below
             #computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key])#**2)
         elif type_of_cost == 'B':
+            computation_time_for_G.append(predict_B_comptime_from_size_and_targrank(size = size_0_of_all_Kfactors_G[key], starting_rank = 220, incoming_rank = 256))
             # in this case target_rank_ is actually target_rank_B + N_BS but leaving same variable name for simplicity
             # diving cost by (target_rank_ + batch_size_) to make numbers more manageable (arguably not needed)
-            if size_0_of_all_Kfactors_G[key] / (target_rank_ + batch_size_) > 1: # if we perform a true B-update fr this layer
-                computation_time_for_G.append( size_0_of_all_Kfactors_G[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
-            else: # else, we perform an rsvd
-                # here we're assuming the rsvd target rank and the brand target rank are the same
-                computation_time_for_G.append( min(target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2 / (target_rank_ + batch_size_) ) # (target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2
+            #if size_0_of_all_Kfactors_G[key] / (target_rank_ + batch_size_) > 1: # if we perform a true B-update fr this layer
+            #    computation_time_for_G.append( size_0_of_all_Kfactors_G[key]) #  (target_rank_ + batch_size_) * size_0_of_all_Kfactors_G[key]
+            #else: # else, we perform an rsvd
+            #    # here we're assuming the rsvd target rank and the brand target rank are the same
+            #    computation_time_for_G.append( min(target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2 / (target_rank_ + batch_size_) ) # (target_rank_, size_0_of_all_Kfactors_G[key] ) * size_0_of_all_Kfactors_G[key]**2
         
         elif type_of_cost == 'time_given_instead_of_size':
             computation_time_for_G.append(size_0_of_all_Kfactors_G[key])
