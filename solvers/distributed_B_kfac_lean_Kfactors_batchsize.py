@@ -189,7 +189,8 @@ class B_KFACOptimizer(optim.Optimizer):
         
                         self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
                                                                             A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
-                                                                            device = torch.device('cuda:{}'.format(self.rank)) )
+                                                                            device = torch.device('cuda:{}'.format(self.rank)),
+                                                                            truncate_before_inversion = self.truncate_before_inversion)
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
                         actual_rank = self.rsvd_rank + input[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
@@ -218,7 +219,8 @@ class B_KFACOptimizer(optim.Optimizer):
     
                     self.d_a[module], self.Q_a[module] = Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
                                                                         A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
-                                                                        device = torch.device('cuda:{}'.format(self.rank)) )
+                                                                        device = torch.device('cuda:{}'.format(self.rank)),
+                                                                        truncate_before_inversion = self.truncate_before_inversion)
                     self.nkfu_dict_a[module] += 1
                     ########### END BRAND UPDATE #########################
             elif module in self.CaSL_modules_for_this_rank_A[self.rank]:
@@ -283,7 +285,8 @@ class B_KFACOptimizer(optim.Optimizer):
                     
                         self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
                                                                             A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
-                                                                            device = torch.device('cuda:{}'.format(self.rank)) )
+                                                                            device = torch.device('cuda:{}'.format(self.rank)),
+                                                                            truncate_before_inversion = self.truncate_before_inversion)
                         
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
@@ -312,7 +315,8 @@ class B_KFACOptimizer(optim.Optimizer):
                 
                     self.d_g[module], self.Q_g[module] = Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
                                                                         A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
-                                                                        device = torch.device('cuda:{}'.format(self.rank)) )
+                                                                        device = torch.device('cuda:{}'.format(self.rank)),
+                                                                        truncate_before_inversion = self.truncate_before_inversion)
                     self.nkfu_dict_g[module] += 1
                     ########### END BRAND UPDATE #########################
             elif module in self.CaSL_modules_for_this_rank_G[self.rank]:
