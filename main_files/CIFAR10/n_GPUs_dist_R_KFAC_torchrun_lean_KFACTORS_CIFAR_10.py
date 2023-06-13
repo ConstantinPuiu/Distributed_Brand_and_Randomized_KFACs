@@ -145,6 +145,11 @@ def main(world_size, args):
     maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
     rsvd_adaptve_max_history = args.rsvd_adaptve_max_history
     # ====================================================
+    
+    #### for selcting net type ##############
+    net_type = args.net_type
+    #########################################
+    
     # ====================================================
     
     ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
@@ -166,11 +171,17 @@ def main(world_size, args):
     train_set, testset, bsz = partition_dataset(collation_fct)
 
     # instantiate the model(it's your own model) and move it to the right device
-    model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
-                    num_classes = 10,
-                    #growthRate = 12,
-                    #compressionRate = 2,
-                    widen_factor = 1).to(rank)
+    if net_type == 'Conv':
+        model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
+                     num_classes = 10,
+                     #growthRate = 12,
+                     #compressionRate = 2,
+                     widen_factor = 1).to(rank)
+    elif net_type == 'FC':
+        model = get_network('FC_net_for_CIFAR10', dropout = True, #depth = 19,
+                     num_classes = 10).to(rank)
+    else:
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
 
     # wrap the model with DDP
     # device_ids tell DDP where is your model
@@ -279,6 +290,10 @@ def parse_args():
     parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
     parser.add_argument('--rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
     parser.add_argument('--rsvd_adaptve_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
+    
+    ### for selecting net type
+    parser.add_argument('--net_type', type=str, default = 'Conv', help = 'type of net: Conv (gives VGG16_bn less maxpool) or FC (gives an adhoc FC net)' )
+    
     args = parser.parse_args()
     return args
 

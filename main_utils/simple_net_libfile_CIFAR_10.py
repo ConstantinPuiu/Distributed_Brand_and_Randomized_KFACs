@@ -7,7 +7,7 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 #sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.vgg_model import vgg16_bn_less_maxpool
-
+from Distributed_Brand_and_Randomized_KFACs.main_utils.FC_nets import FC_net_for_CIFAR10
   
 def get_network(network, dropout = False, **kwargs):
     '''networks = {
@@ -19,7 +19,8 @@ def get_network(network, dropout = False, **kwargs):
         'wrn': wrn
 
     }'''   
-    networks = {'vgg16_bn_less_maxpool': vgg16_bn_less_maxpool}
+    networks = {'vgg16_bn_less_maxpool': vgg16_bn_less_maxpool,
+                'FC_net_for_CIFAR10': FC_net_for_CIFAR10}
     
     # select network
     Net = networks[network](**kwargs)
@@ -32,7 +33,14 @@ def get_network(network, dropout = False, **kwargs):
                                                   nn.Dropout(), # p =0.5  by default
                                                   nn.Linear(512 * 4, 10),
                                               )
+        elif network == 'FC_net_for_CIFAR10':
+            Net.classifier = nn.Sequential(
+                                                  nn.Linear(512 * 8 * 4, 512 * 4),
+                                                  nn.ReLU(True),
+                                                  nn.Dropout(), # p =0.5  by default
+                                                  nn.Linear(512 * 4, 10),
+                                              )
         else:
-            raise NotImplementedError('Dropout only implemented for [vgg16_bn_less_maxpool] for now!')
+            raise NotImplementedError('Dropout only implemented for [vgg16_bn_less_maxpool] and [FC_net_for_CIFAR10] for now!')
     
     return Net

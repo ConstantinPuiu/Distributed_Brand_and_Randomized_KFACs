@@ -130,10 +130,14 @@ def main(world_size, args):
     TInv_period = args.TInv_period
     
     ######### BRAND K-fac (also BRSKFAC) specific parameters
-    brand_period = args.brand_period 
+    #brand_period = args.brand_period 
     brand_r_target_excess = args.brand_r_target_excess
     brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
     # ====================================================
+    
+    #### for selcting net type ##############
+    net_type = args.net_type
+    #########################################
     
     ### added for efficient work allocation
     if args.work_alloc_propto_RSVD_and_B_cost == 0:
@@ -161,11 +165,17 @@ def main(world_size, args):
     train_set, testset, bsz = partition_dataset(collation_fct)
 
     # instantiate the model(it's your own model) and move it to the right device
-    model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
+    if net_type == 'Conv':
+        model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
                     num_classes = 10,
                     #growthRate = 12,
                     #compressionRate = 2,
                     widen_factor = 1).to(rank)
+    elif net_type == 'FC':
+        model = get_network('FC_net_for_CIFAR10', dropout = True, #depth = 19,
+                    num_classes = 10).to(rank)
+    else:
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
 
     # wrap the model with DDP
     # device_ids tell DDP where is your model
@@ -256,7 +266,7 @@ def parse_args():
     parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTAITONS' )
     
     ######### BRAND K-fac (also BRSKFAC) specific parameters
-    parser.add_argument('--brand_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period)' )
+    #parser.add_argument('--brand_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period)' )
     # this argument above is not used by B-pure-KFAC!
     parser.add_argument('--brand_r_target_excess', type=int, default=0, help='How many more modes to keep in the B-(.) than in the R-(.) reprezentation' )
     parser.add_argument('--brand_update_multiplier_to_TCov', type=int, default=1, help='The factor by which the B-update frequency is LOWER than the frequency at which we reiceve new K-factor information' )
@@ -265,6 +275,9 @@ def parse_args():
     ### added to deal with more efficient wokr allocaiton
     #
     parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=int, default=1, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set to any nonzero if yes. we use int rather than bool as argparse works badly with bool!' ) 
+    
+    ### for selecting net type
+    parser.add_argument('--net_type', type=str, default = 'Conv', help = 'type of net: Conv (gives VGG16_bn less maxpool) or FC (gives an adhoc FC net)' )
     args = parser.parse_args()
     return args
 
