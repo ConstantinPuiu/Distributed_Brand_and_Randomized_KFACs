@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:20:00
+#SBATCH --time=00:10:00
 #SBATCH --job-name=1G_RK
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
@@ -9,7 +9,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=single:1
 #SBATCH --mem-per-cpu=15G
-#SBATCH --partition=short
+#SBATCH --partition=devel
 
 module purge
 module load Anaconda3/2020.11
@@ -21,5 +21,4 @@ source activate /data/math-opt-ml/chri5570/myenv
 #optDLvenv
 
 #mpiexec python ./attempt_4_GPUs_naive_KFAC.py
-torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 1 --n_epoch 10
-
+torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 1 --n_epoch 6 --work_alloc_propto_RSVD_cost 0 --work_eff_alloc_with_time_measurement 0 --adaptable_rsvd_rank 0 --rank_adaptation_TInv_multiplier 1
