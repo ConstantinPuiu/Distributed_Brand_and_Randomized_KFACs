@@ -1,6 +1,6 @@
 import torch
 
-def Brand_S_update(U, D, A, r_target, device):
+def Brand_S_update(U, D, A, r_target, device, truncate_before_inversion = False):
     # M = U D U^T is the current "on the fly matrix"
     # A is the incming A form M + AA^T
     # r_target is where we'll crop the new RSCD representation, if needed - set to None to avoid cropping
@@ -49,6 +49,19 @@ def Brand_S_update(U, D, A, r_target, device):
     # when doing the eigendecompositon. THUS we save the transposition and storage cost!
     S, hat_U = torch.linalg.eigh(M, UPLO='U')
     hat_U = torch.matmul(U_tilde, hat_U)
-    
+
+    ###### force output to have target rank to reduce cost of inverse application ##
+    ##### set truncate_before_inversion to FALSE below to go back to standard version ###############
+    if truncate_before_inversion == True:
+        r = S.shape[0]
+        if r_target is not None: # if we want to crop down to a specified rank
+            #eigenvalues seem to be sorted ascendingly
+            if r_target < r:
+                S = S[-r_target:]
+                hat_U = hat_U[:, -r_target:]
+                r = r_target
+            else: # if we ask for a bigger rank than what we actually ahve, pass !
+                pass
+
     return S, hat_U.contiguous()
 
