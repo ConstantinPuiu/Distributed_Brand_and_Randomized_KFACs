@@ -40,7 +40,7 @@ def allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers, measured_invti
 # end wrappers ###############
 
 ###########################################################################################################################
-####### Helper functions for: predicting time based on size with measurements nd more sophssticated computation ###########
+####### Helper functions for: predicting RSVD time based on size with measurements nd more sophssticated computation ######
 ###########################################################################################################################
 theta_results_dict = {30: [0.00255482, 0.01016938, 0.05377455],
                       80: [0.00499274, 0.01908004, 0.14648095],
@@ -65,8 +65,10 @@ def pred_theta_1_from_omega(total_rank):
 def pred_theta_2_from_omega(total_rank):
     return omega_2[0] + total_rank *omega_2[1]
 # then, after we recover theta based on target rank we get the cpu time based on size and theta.
+############## end RSVD helper learnt (from measurements) quantities - for time prediciton #################################
 
-def predict_comptime_from_size_and_targrank(size, total_rank):
+
+def predict_RSVD_comptime_from_size_and_targrank(size, total_rank):
     if total_rank < 30: # make sure we fall within the 30,520 interval
         total_rank = 30
     elif total_rank > 520:
@@ -79,7 +81,7 @@ def predict_comptime_from_size_and_targrank(size, total_rank):
     
     #### then given these parameters we predict the cpu time based on size and return
     def predict_time_from_pred_theta_and_size(sizze):
-        sizze = sizze / 33000
+        sizze = sizze / 33000 # the 33000 factor was used at learning so also using at prediciton
         return thetta_0 + thetta_1 * sizze + thetta_2 *sizze **2
     
     return predict_time_from_pred_theta_and_size(size)
@@ -118,7 +120,7 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
             computation_time_for_A.append(size_0_of_all_Kfactors_A[key]**3)
         elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
             total_rank_ = target_rank_ + oversampling_to_rank_
-            computation_time_for_A.append(predict_comptime_from_size_and_targrank(size_0_of_all_Kfactors_A[key], total_rank_))#**2)
+            computation_time_for_A.append(predict_RSVD_comptime_from_size_and_targrank(size_0_of_all_Kfactors_A[key], total_rank_))#**2)
             # old and inaccurate below
             #computation_time_for_A.append( min(1, size_0_of_all_Kfactors_A[key]/target_rank_) * size_0_of_all_Kfactors_A[key])#**2)
         elif type_of_cost == 'B':
@@ -143,7 +145,7 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
             computation_time_for_G.append(size_0_of_all_Kfactors_G[key]**3)
         elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
             total_rank_ = target_rank_ + oversampling_to_rank_
-            computation_time_for_G.append(predict_comptime_from_size_and_targrank(size_0_of_all_Kfactors_G[key], total_rank_))#**2)
+            computation_time_for_G.append(predict_RSVD_comptime_from_size_and_targrank(size_0_of_all_Kfactors_G[key], total_rank_))#**2)
             # old and inaccurate below
             #computation_time_for_G.append(min(1, size_0_of_all_Kfactors_G[key] / target_rank_) * size_0_of_all_Kfactors_G[key])#**2)
         elif type_of_cost == 'B':
