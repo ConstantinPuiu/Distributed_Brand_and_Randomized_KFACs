@@ -221,7 +221,7 @@ class KFACOptimizer(optim.Optimizer):
                 print('RANK {} WORLDSIZE {}. computed "A"-EVD of module {} \n'.format(self.rank, self.world_size, m))
             
             eps = 1e-10  # for numerical stability
-            self.d_a[m], self.Q_a[m] = torch.linalg.eigvalsh(self.m_aa[m], UPLO = 'U') #deprecated # torch.symeig( self.m_aa[m], eigenvectors=True)
+            self.d_a[m], self.Q_a[m] = torch.linalg.eigh(self.m_aa[m], UPLO = 'U') #deprecated # torch.symeig( self.m_aa[m], eigenvectors=True)
             self.d_a[m].mul_((self.d_a[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_a[m] = self.Q_a[m].contiguous()
@@ -236,7 +236,7 @@ class KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed "G"-EVD of module {} \n'.format(self.rank, self.world_size, m))
             eps = 1e-10  # for numerical stability
-            self.d_g[m], self.Q_g[m] = torch.linalg.eigvalsh(self.m_gg[m], UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
+            self.d_g[m], self.Q_g[m] = torch.linalg.eigh(self.m_gg[m], UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
             self.d_g[m].mul_((self.d_g[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
