@@ -151,6 +151,7 @@ def main(world_size, args):
         B_truncate_before_inversion = False
     else:
         B_truncate_before_inversion = True
+    # ====================================================###############################
     
     ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
     # dict to have schedule! eys are epochs: key map to frequency, stuff only changes at keys and then stays constant.

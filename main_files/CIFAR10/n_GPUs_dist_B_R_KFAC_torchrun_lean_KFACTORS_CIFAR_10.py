@@ -136,6 +136,13 @@ def main(world_size, args):
     # ====================================================
     # ====================================================
     
+    ######## added to control whether we B-truncate before or after inversion ###########
+    if args.B_truncate_before_inversion == 0:
+        B_truncate_before_inversion = False
+    else:
+        B_truncate_before_inversion = True
+    # ====================================================###############################
+    
     ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
     # dict to have schedule! eys are epochs: key map to frequency, stuff only changes at keys and then stays constant.
     KFAC_matrix_update_frequency_dict = {0: TCov_period, 5: TCov_period}#, 10: 5, 20: 5, 22: 5, 50: 5}
@@ -180,7 +187,8 @@ def main(world_size, args):
                                 clip_type = clip_type,
                                 brand_period = brand_period, 
                                 brand_r_target_excess = brand_r_target_excess,
-                                brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov)#    optim.SGD(model.parameters(),
+                                brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
+                                B_truncate_before_inversion = B_truncate_before_inversion)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -254,6 +262,10 @@ def parse_args():
     parser.add_argument('--brand_r_target_excess', type=int, default=0, help='How many more modes to keep in the B-(.) than in the R-(.) reprezentation' )
     parser.add_argument('--brand_update_multiplier_to_TCov', type=int, default=1, help='The factor by which the B-update frequency is LOWER than the frequency at which we reiceve new K-factor information' )
     # ====================================================
+    
+    #### added to allow for B-truncating just before inversion as well
+    parser.add_argument('--B_truncate_before_inversion', type=int, default=0, help='Do we want to B-truncate just before inversion (more speed less accuracy) If so set to 1 (or anything other than 0). Standard way to deal with bools wiht buggy argparser that only work correctly wiht numbers!' ) 
+    
       
     args = parser.parse_args()
     return args
@@ -265,6 +277,7 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for B-R-KFAC lean with brand_period = {}, brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.brand_period, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
+    print('Important args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {} \n'.format('NOT IMPLEMENTED YET', args.B_truncate_before_inversion))
     #print('type of brand_r_target_excess is {}'.format(type(args.brand_r_target_excess)))
     print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size

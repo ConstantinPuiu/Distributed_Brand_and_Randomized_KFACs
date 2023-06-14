@@ -13,7 +13,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
 
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subroutine import Brand_S_update
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subroutine import Brand_S_update, Brand_S_update_truncate_before_invapplic
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping, RSVD_lowrank)
 
 class B_R_KFACOptimizer(optim.Optimizer):
@@ -36,7 +36,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
                  clip_type = 'non_standard',
                  brand_period = 10, 
                  brand_r_target_excess = 0,
-                 brand_update_multiplier_to_TCov = 1):
+                 brand_update_multiplier_to_TCov = 1,
+                 B_truncate_before_inversion = False):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -113,6 +114,11 @@ class B_R_KFACOptimizer(optim.Optimizer):
         self.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov
         self.sqr_1_minus_stat_decay = (1 - stat_decay)**(0.5) # to avoid recomputations
         self.batch_size = None
+        self.B_truncate_before_inversion = B_truncate_before_inversion
+        if B_truncate_before_inversion:
+            self.Brand_S_update = Brand_S_update_truncate_before_invapplic
+        else:
+            self.Brand_S_update = Brand_S_update
         #######################################################################
         
         #### for tracking which modules are on Brand track and whicha ren't
