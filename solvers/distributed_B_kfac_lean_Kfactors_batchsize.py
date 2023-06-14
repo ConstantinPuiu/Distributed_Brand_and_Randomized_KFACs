@@ -360,7 +360,7 @@ class B_KFACOptimizer(optim.Optimizer):
             if classname in self.known_modules:
                 self.modules.append(module)
                 module.register_forward_pre_hook(self._save_input)
-                module.register_backward_hook(self._save_grad_output)
+                module.register_full_backward_hook(self._save_grad_output) # deprecated: # module.register_backward_hook(self._save_grad_output)
                 print('(%s): %s' % (count, module))
                 count += 1
         
