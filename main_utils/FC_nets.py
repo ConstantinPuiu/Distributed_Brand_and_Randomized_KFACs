@@ -6,11 +6,11 @@ class FC_net_for_CIFAR10(nn.Module):
         super(FC_net_for_CIFAR10, self).__init__()
         self.fc1 = nn.Linear(3072, 2048) # nn.Linear(7 * 16, 30)
         self.fc2 = nn.Linear(2048, 8192) # nn.Linear(30, 10)
-        self.fc3 = nn.Linear(8192, 14000)
-        self.fc4 = nn.Linear(14000, 16384)
+        self.fc3 = nn.Linear(8192, 12000)
+        self.fc4 = nn.Linear(12000, 16384)
         self.classifier = nn.Sequential(
                                               nn.Linear(512 * 8 * 4, 512 * 4),
-                                              nn.ReLU(True),
+                                              nn.ReLU(inplace = False),
                                               nn.Linear(512 * 4, num_classes),
                                           )
 

@@ -192,6 +192,7 @@ def main(world_size, args):
                 print('\ntype(pred) = {}, pred = {}, pred.get_device() = {}\n'.format(type(pred), pred, pred.get_device()))
                 print('\ntype(y) = {}, y = {}, y.get_device() = {}\n'.format(type(y),y, y.get_device()))
                 loss = loss_fn(pred, y)
+            #print('rank = {} at step ={} has loss.item() = {}'.format(rank,optimizer.steps,loss.item()))
 
             loss.backward()
             if jdx % 150 == 0 and epoch == n_epochs - 1:
