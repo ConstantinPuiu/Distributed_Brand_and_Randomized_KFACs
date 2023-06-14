@@ -229,6 +229,8 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for KFAC lean\n'.format(now_start))
+    print('Important args were:\n  --work_alloc_propto_EVD_cost = {} ; \n'.format(args.work_alloc_propto_EVD_cost))
+    print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
     main(world_size, args)
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
