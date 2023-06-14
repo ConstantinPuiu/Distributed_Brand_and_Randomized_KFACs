@@ -29,14 +29,14 @@ def get_network(network, dropout = False, **kwargs):
         if network == 'vgg16_bn_less_maxpool':
             Net.classifier = nn.Sequential(
                                                   nn.Linear(512 * 8 * 4, 512 * 4),
-                                                  nn.ReLU(True),
+                                                  nn.ReLU(inplace = False),
                                                   nn.Dropout(), # p =0.5  by default
                                                   nn.Linear(512 * 4, 10),
                                               )
         elif network == 'FC_net_for_CIFAR10':
             Net.classifier = nn.Sequential(
                                                   nn.Linear(512 * 8 * 4, 512 * 4),
-                                                  nn.ReLU(True),
+                                                  nn.ReLU(inplace = False),
                                                   nn.Dropout(), # p =0.5  by default
                                                   nn.Linear(512 * 4, 10),
                                               )
