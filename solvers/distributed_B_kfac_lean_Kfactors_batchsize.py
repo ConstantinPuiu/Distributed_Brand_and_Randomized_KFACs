@@ -40,7 +40,7 @@ class B_KFACOptimizer(optim.Optimizer):
                  clip_type = 'non_standard',
                  brand_r_target_excess = 0,
                  brand_update_multiplier_to_TCov = 1,
-                 truncate_before_inversion = False,
+                 B_truncate_before_inversion = False,
                  work_alloc_propto_RSVD_and_B_cost = True):
         
         if momentum < 0.0:
@@ -119,8 +119,8 @@ class B_KFACOptimizer(optim.Optimizer):
         self.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov
         self.sqr_1_minus_stat_decay = (1 - stat_decay)**(0.5) # to avoid recomputations
         self.batch_size = None
-        self.truncate_before_inversion = truncate_before_inversion
-        if truncate_before_inversion:
+        self.B_truncate_before_inversion = B_truncate_before_inversion
+        if B_truncate_before_inversion:
             self.Brand_S_update = Brand_S_update_truncate_before_invapplic
         else:
             self.Brand_S_update = Brand_S_update
@@ -196,8 +196,8 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                             device = torch.device('cuda:{}'.format(self.rank)))
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
-                        actual_rank = self.brand_r_target + (not self.truncate_before_inversion) * input[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
-                        # (not self.truncate_before_inversion) is FALSE when we truncate after inversion. in that case we want TRUE * number to get number
+                        actual_rank = self.brand_r_target + (not self.B_truncate_before_inversion) * input[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        # (not self.B_truncate_before_inversion) is FALSE when we truncate after inversion. in that case we want TRUE * number to get number
                         # we aso have that False * number = 0
                         self.d_a[module] = 0 * aa[0,:actual_rank]; self.Q_a[module] = 0 * aa[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
@@ -293,8 +293,8 @@ class B_KFACOptimizer(optim.Optimizer):
                         
                         ########### END BRAND UPDATE #########################
                     else: # else, if the layer is LL but not alloc to *this GPU, just initilalize correct shapes
-                        actual_rank = self.brand_r_target + (not self.truncate_before_inversion) * grad_output[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
-                        # (not self.truncate_before_inversion) is FALSE when we truncate after inversion. in that case we want TRUE * number to get number
+                        actual_rank = self.brand_r_target + (not self.B_truncate_before_inversion) * grad_output[0].data.shape[0]# NOTE: # batch_size = input[0].data.shape[0]
+                        # (not self.B_truncate_before_inversion) is FALSE when we truncate after inversion. in that case we want TRUE * number to get number
                         # we aso have that False * number = 0
                         self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
