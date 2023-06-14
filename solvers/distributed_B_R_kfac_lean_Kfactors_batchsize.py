@@ -481,7 +481,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                     continue
                 d_p = p.grad.data
                 if weight_decay != 0 and self.steps >= 20 * self.TCov:
-                    d_p.add_(weight_decay, p.data)
+                    d_p.add_(p.data , weight_decay)
                 if momentum != 0:
                     param_state = self.state[p]
                     if 'momentum_buffer' not in param_state:
@@ -489,10 +489,10 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         buf.mul_(momentum).add_(d_p)
                     else:
                         buf = param_state['momentum_buffer']
-                        buf.mul_(momentum).add_(1, d_p)
+                        buf.mul_(momentum).add_(d_p , 1)
                     d_p = buf
 
-                p.data.add_( - group['lr'], d_p)
+                p.data.add_( d_p , - group['lr'])
 
     def step(self, epoch_number, error_savepath, closure = None):
         
