@@ -184,10 +184,10 @@ def main(world_size, args):
         raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
 
     # wrap the model with DDP
-    # device_ids tell DDP where is your model
+    # device_ids tell DDP where the model is
     # output_device tells DDP where to output, in our case, it is rank
     # find_unused_parameters=True instructs DDP to find unused output of the forward() function of any module in the model
-    model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters=True)
+    model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters = False)
     #################### The above is defined previously
 
     optimizer =  B_KFACOptimizer(model, rank = rank, world_size = world_size, 

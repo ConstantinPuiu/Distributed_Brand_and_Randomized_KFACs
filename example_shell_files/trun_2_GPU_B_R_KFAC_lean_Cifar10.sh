@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:07:00
+#SBATCH --time=00:10:00
 #SBATCH --job-name=2G_BRK
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
@@ -9,7 +9,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=single:1
 #SBATCH --mem-per-cpu=15G
-#SBATCH --partition=short
+#SBATCH --partition=devel
 
 module purge
 module load Anaconda3/2020.11

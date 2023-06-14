@@ -373,8 +373,10 @@ class B_KFACOptimizer(optim.Optimizer):
         self.initalloc_modules_for_this_rank_A = self.initalloc_modules_for_this_rank_G = fct_split_list_of_modules(self.modules, self.world_size)
         # call the same fct for A and G to get the same TRIVIAL split in both A and G: that boils down to being a module-split rather than a KFACTOR split
         # returns a dictionary of lists!
-        print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n\n self.modules_for_this_rank_G = {}'.format(self.initalloc_modules_for_this_rank_A, self.initalloc_modules_for_this_rank_G))
-        print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_and_B_cost))
+        
+        # comment out the prints below to imprve speed and reduce spam in output file
+        #print('Split work in TRIVIAL fashion as: self.modules_for_this_rank_A = {} \n\n self.modules_for_this_rank_G = {}'.format(self.initalloc_modules_for_this_rank_A, self.initalloc_modules_for_this_rank_G))
+        #print('The following sentece is {} : We will also improve the allocation from the 2nd KFACTOR work onwards (at end of step 0)'.format(self.work_alloc_propto_RSVD_and_B_cost))
 
     def _update_inv(self, m):
         """Do eigen decomposition for computing inverse of the ~ fisher.
