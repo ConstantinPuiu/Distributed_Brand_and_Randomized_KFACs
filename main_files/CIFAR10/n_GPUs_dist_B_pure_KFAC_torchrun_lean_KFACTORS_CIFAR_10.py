@@ -270,7 +270,7 @@ def parse_args():
     ### Others added only once moved to CIFAR10
     parser.add_argument('--n_epochs', type=int, default=10, help='Number_of_epochs' )
     parser.add_argument('--TCov_period', type=int, default=20, help='Period of reupdating Kfactors (not inverses) ' )
-    parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTAITONS' )
+    parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTATIONS' )
     
     ######### BRAND K-fac (also BRSKFAC) specific parameters
     #parser.add_argument('--brand_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period)' )

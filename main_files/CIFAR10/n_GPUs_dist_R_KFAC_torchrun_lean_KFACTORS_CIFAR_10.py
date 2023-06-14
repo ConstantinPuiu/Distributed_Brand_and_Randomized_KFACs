@@ -277,7 +277,7 @@ def parse_args():
     ### Others added only once moved to CIFAR10
     parser.add_argument('--n_epochs', type=int, default=10, help='Number_of_epochs' )
     parser.add_argument('--TCov_period', type=int, default=20, help='Period of reupdating Kfactors (not inverses) ' )
-    parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTAITONS' )
+    parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTATIONS' )
     
     ### added to deal with more efficient work allocaiton
     #

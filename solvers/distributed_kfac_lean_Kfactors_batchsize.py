@@ -221,8 +221,7 @@ class KFACOptimizer(optim.Optimizer):
                 print('RANK {} WORLDSIZE {}. computed "A"-EVD of module {} \n'.format(self.rank, self.world_size, m))
             
             eps = 1e-10  # for numerical stability
-            self.d_a[m], self.Q_a[m] = torch.symeig(
-                self.m_aa[m], eigenvectors=True)
+            self.d_a[m], self.Q_a[m] = torch.linalg.eigvalsh(self.m_aa[m], UPLO = 'U') #deprecated # torch.symeig( self.m_aa[m], eigenvectors=True)
             self.d_a[m].mul_((self.d_a[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_a[m] = self.Q_a[m].contiguous()
@@ -237,8 +236,7 @@ class KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed "G"-EVD of module {} \n'.format(self.rank, self.world_size, m))
             eps = 1e-10  # for numerical stability
-            self.d_g[m], self.Q_g[m] = torch.symeig(
-                self.m_gg[m], eigenvectors=True)
+            self.d_g[m], self.Q_g[m] = torch.linalg.eigvalsh(self.m_gg[m], UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
             self.d_g[m].mul_((self.d_g[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
@@ -404,8 +402,10 @@ class KFACOptimizer(optim.Optimizer):
                 self.old_modules_for_this_rank_G = self.modules_for_this_rank_G
                 self.modules_for_this_rank_A = new_modules_for_this_rank_A
                 self.modules_for_this_rank_G = new_modules_for_this_rank_G
-                print(' self.work_alloc_propto_EVD_cost was set to TRUE, so at the very end of self.steps == 0, we reallocated work in proportion to squared-size')
-                print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
+                
+                #comment the below prints for less spam and slightly better speed
+                #print(' self.work_alloc_propto_EVD_cost was set to TRUE, so at the very end of self.steps == 0, we reallocated work in proportion to squared-size')
+                #print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
         #### END : change work allocation to dimension-based for RSVD
         
         self._step(closure)

@@ -215,7 +215,7 @@ def parse_args():
     ### Others added only once moved to CIFAR10
     parser.add_argument('--n_epochs', type=int, default = 10, help = 'Number_of_epochs' )
     parser.add_argument('--TCov_period', type=int, default = 20, help = 'Period of reupdating Kfactors (not inverses)' )
-    parser.add_argument('--TInv_period', type=int, default = 100, help = 'Period of reupdating K-factor INVERSE REPREZENTAITONS' )
+    parser.add_argument('--TInv_period', type=int, default = 100, help = 'Period of reupdating K-factor INVERSE REPREZENTATIONS' )
     
     #### for efficient work allocaiton selection
     parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
