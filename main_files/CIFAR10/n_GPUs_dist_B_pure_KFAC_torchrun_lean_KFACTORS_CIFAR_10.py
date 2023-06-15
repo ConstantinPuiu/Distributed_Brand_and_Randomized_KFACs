@@ -305,7 +305,7 @@ def parse_args():
     parser.add_argument('--B_truncate_before_inversion', type=int, default=0, help='Do we want to B-truncate just before inversion (more speed less accuracy) If so set to 1 (or anything other than 0). Standard way to deal with bools wiht buggy argparser that only work correctly wiht numbers!' ) 
     
     #### added to dal with RSVD adaptable rank
-    parser.add_argument('--adaptable_rsvd_rank', type=int, default=1, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--adaptable_rsvd_rank', type=int, default = 0, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
     parser.add_argument('--rsvd_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in rsvd: the ran will adapt to be around this error (but rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank)' ) 
     parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
     parser.add_argument('--rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
