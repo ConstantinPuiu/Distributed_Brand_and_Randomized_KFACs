@@ -725,9 +725,10 @@ class B_KFACOptimizer(optim.Optimizer):
                 #if it's time to recompute inverse for Conv layers or for liear (BRAND) layers
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_a={}, size_d_a = {}, Q_a = {}, size_Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.d_a[m].shape, self.Q_a[m], self.Q_a[m].shape))
+                # uncomment line below for better debugger
                 #print('RANK {}. Doing line: dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 #if m in self.size_0_of_LL_Kfactors_A: 
-                print('\n\nrank = {}, step# = {}, module = {} :: self.d_a[m].shape = {};\nself.d_a[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_a[m].shape, self.d_a[m]))
+                #print('\n\nrank = {}, step# = {}, module = {} :: self.d_a[m].shape = {};\nself.d_a[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_a[m].shape, self.d_a[m]))
                 handle = dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_a[m] = 0 * self.d_a[m] + 1
@@ -744,7 +745,8 @@ class B_KFACOptimizer(optim.Optimizer):
                 #print('RANK {}. Doing line : dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_g={}, size_d_g = {}, Q_g = {}, size_Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.d_g[m].shape, self.Q_g[m], self.Q_g[m].shape))
-                print('\n\nrank = {}, step# = {}, module = {} :: self.d_g[m].shape = {};\nself.d_g[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_g[m].shape, self.d_g[m]))
+                # uncomment line below for better debugger
+                #print('\n\nrank = {}, step# = {}, module = {} :: self.d_g[m].shape = {};\nself.d_g[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_g[m].shape, self.d_g[m]))
                 handle = dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_g[m] = 0 * self.d_g[m] + 1
@@ -887,7 +889,7 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                          target_rel_err = self.B_target_truncation_rel_err,
                                                                          TInv_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier)
                 # UNCOMMENT LINE BELOW FOR DEBUG OF rsvd adaptive rank mechanism
-                print('\n self.rank = {}, self.steps = {}: \n self.all_prev_B_trunc_errs_a = {}, self.all_prev_B_used_ranks_a = {}, \n self.current_B_ranks_a = {}; \n self.all_prev_B_trunc_errs_g = {}; \n self.all_prev_B_used_ranks_g = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_B_trunc_errs_a, self.all_prev_B_used_ranks_a, self.current_B_ranks_a, self.all_prev_B_trunc_errs_g, self.all_prev_B_used_ranks_g, self.current_B_ranks_g))
+                #print('\n self.rank = {}, self.steps = {}: \n self.all_prev_B_trunc_errs_a = {}, self.all_prev_B_used_ranks_a = {}, \n self.current_B_ranks_a = {}; \n self.all_prev_B_trunc_errs_g = {}; \n self.all_prev_B_used_ranks_g = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_B_trunc_errs_a, self.all_prev_B_used_ranks_a, self.current_B_ranks_a, self.all_prev_B_trunc_errs_g, self.all_prev_B_used_ranks_g, self.current_B_ranks_g))
             ####### END : For dealing wth adaptive B- rank : append and recompute at right times #######################
             ##############################################################################################################            
                         
