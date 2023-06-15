@@ -41,7 +41,7 @@ class R_KFACOptimizer(optim.Optimizer):
                  rsvd_target_truncation_rel_err = 0.033,
                  maximum_ever_admissible_rsvd_rank = 700,
                  rank_adaptation_TInv_multiplier = 5,
-                 rsvd_adaptve_max_history = 30):
+                 rsvd_adaptive_max_history = 30):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -143,7 +143,7 @@ class R_KFACOptimizer(optim.Optimizer):
         self.rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err
         self.maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank     
         self.rank_adaptation_TInv_multiplier = rank_adaptation_TInv_multiplier
-        self.rsvd_adaptve_max_history = rsvd_adaptve_max_history # units of elements in list (one element comes every TInv iters)
+        self.rsvd_adaptive_max_history = rsvd_adaptive_max_history # units of elements in list (one element comes every TInv iters)
         self.current_rsvd_ranks_a = {} # dictionary where key is module, and value is the current rank of rsvd for that module for A Kfactor
         self.current_rsvd_ranks_g = {} # dictionary where key is module, and value is the current rank of rsvd for that module for G Kfactor
         self.all_prev_trunc_errs_a = {} # stores all prev truncation errors for all local modules as lists
@@ -668,15 +668,15 @@ class R_KFACOptimizer(optim.Optimizer):
                         self.all_prev_rsvd_used_ranks_g[m].append(self.d_g[m].shape[0])
                     ####### END: A & G: append rank and errors #########################################################################
                         
-                    #### avoid too long time history: cap it to self.rsvd_adaptve_max_history #######
+                    #### avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     # we do this to keep information recent and also to limit memory usage and computation
-                    if len(self.all_prev_trunc_errs_a) > self.rsvd_adaptve_max_history:
+                    if len(self.all_prev_trunc_errs_a) > self.rsvd_adaptive_max_history:
                         # all lists below hae always the same length, so do it accordingly on all lists
-                        self.all_prev_trunc_errs_a[m] = self.all_prev_trunc_errs_a[m][-self.rsvd_adaptve_max_history:]
-                        self.all_prev_trunc_errs_g[m] = self.all_prev_trunc_errs_g[m][-self.rsvd_adaptve_max_history:]
-                        self.all_prev_rsvd_used_ranks_a[m] = self.all_prev_rsvd_used_ranks_a[m][-self.rsvd_adaptve_max_history:]
-                        self.all_prev_rsvd_used_ranks_g[m] = self.all_prev_rsvd_used_ranks_g[m][-self.rsvd_adaptve_max_history:]
-                    #### END: avoid too long time history: cap it to self.rsvd_adaptve_max_history #######
+                        self.all_prev_trunc_errs_a[m] = self.all_prev_trunc_errs_a[m][-self.rsvd_adaptive_max_history:]
+                        self.all_prev_trunc_errs_g[m] = self.all_prev_trunc_errs_g[m][-self.rsvd_adaptive_max_history:]
+                        self.all_prev_rsvd_used_ranks_a[m] = self.all_prev_rsvd_used_ranks_a[m][-self.rsvd_adaptive_max_history:]
+                        self.all_prev_rsvd_used_ranks_g[m] = self.all_prev_rsvd_used_ranks_g[m][-self.rsvd_adaptive_max_history:]
+                    #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
                     if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
