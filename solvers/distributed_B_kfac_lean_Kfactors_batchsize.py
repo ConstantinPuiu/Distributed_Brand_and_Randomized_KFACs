@@ -294,7 +294,7 @@ class B_KFACOptimizer(optim.Optimizer):
                         A = torch.cat([A, A.new(A.size(0), 1).fill_(1)], 1).T
                     
                     #### A: select correct target (adaptive) B- rank ################
-                    if self.adaptable_B_rank == False or self.steps <= (self.TCov * self.B_rank_adaptation_T_brand_updt_multiplier):
+                    if self.adaptable_B_rank == False or self.steps <= (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier):
                         actual_B_target_rank = self.brand_r_target
                     else:
                         #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
@@ -416,7 +416,7 @@ class B_KFACOptimizer(optim.Optimizer):
                         G = grad_output[0].data.T / (batch_size + 0.0)**0.5
                     
                     #### G: select correct target (adaptive) B- rank ################
-                    if self.adaptable_B_rank == False or self.steps <= (self.TCov * self.B_rank_adaptation_T_brand_updt_multiplier):
+                    if self.adaptable_B_rank == False or self.steps <= (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier):
                         actual_B_target_rank = self.brand_r_target
                     else:
                         #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
