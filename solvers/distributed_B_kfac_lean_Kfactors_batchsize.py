@@ -793,7 +793,7 @@ class B_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.TInv * self.B_rank_adaptation_TInv_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
                         self.current_B_ranks_a[m] = get_new_B_rank(self.all_prev_B_trunc_errs_a[m], self.all_prev_B_used_ranks_a[m], 
                                                                          max_rank = min(self.maximum_ever_admissible_B_rank, self.Q_a[m].shape[0]), #tensor_size = self.Q_a[m].shape[0],
@@ -821,9 +821,9 @@ class B_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.TInv * self.B_rank_adaptation_TInv_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
-                        self.current_B_ranks_g[m] = get_new_B_rank(self.all_prev_rsvd_trunc_errs_g[m], self.all_prev_B_used_ranks_g[m], 
+                        self.current_B_ranks_g[m] = get_new_B_rank(self.all_prev_B_trunc_errs_g[m], self.all_prev_B_used_ranks_g[m], 
                                                                          max_rank = min(self.maximum_ever_admissible_B_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],
                                                                          target_rel_err = self.B_target_truncation_rel_err,
                                                                          TInv_multiplier = self.B_rank_adaptation_TInv_multiplier)
