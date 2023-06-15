@@ -20,7 +20,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_B_inversion_work_same_fixed_r_and_batchsize
 
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank, get_new_B_rank
 
 class B_KFACOptimizer(optim.Optimizer):
     def __init__(self,
@@ -55,7 +55,7 @@ class B_KFACOptimizer(optim.Optimizer):
                  B_target_truncation_rel_err = 0.033,
                  maximum_ever_admissible_B_rank = 500,
                  B_rank_adaptation_TInv_multiplier = 5,
-                 B_rsvd_adaptive_max_history = 30):
+                 B_adaptive_max_history = 30):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -187,6 +187,24 @@ class B_KFACOptimizer(optim.Optimizer):
             # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
             self.aa_for_reinit = {}; self.gg_for_reinit = {} 
         #### end: for adaptable rsvd rank ####
+            
+        #### for adaptable B rank ####
+        # why we may want this? similar logic to rsvd adaptable rank idea (sea above)
+        self.adaptable_B_rank = adaptable_B_rank
+        self.B_target_truncation_rel_err = B_target_truncation_rel_err
+        self.maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank     
+        self.B_rank_adaptation_TInv_multiplier = B_rank_adaptation_TInv_multiplier
+        self.B_adaptive_max_history = B_adaptive_max_history # units of elements in list (one element comes every TInv iters)
+        self.current_B_ranks_a = {} # dictionary where key is module, and value is the current rank of rsvd for that module for A Kfactor
+        self.current_B_ranks_g = {} # dictionary where key is module, and value is the current rank of rsvd for that module for G Kfactor
+        self.all_prev_B_trunc_errs_a = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_B_used_ranks_a = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_B_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_B_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
+        if self.adaptable_B_rank == True:
+            # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
+            raise NotImplementedError('Have to find a way to reinitialize the B quantities to keep up with the changing communicated rank')
+        #### end: for adaptable B rank ####
         
         self._prepare_model()
         
@@ -745,7 +763,74 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                          target_rel_err = self.rsvd_target_truncation_rel_err,
                                                                          TInv_multiplier = self.rsvd_rank_adaptation_TInv_multiplier)
             ####### END : For dealing wth adaptive RSVD rank : append and recompute at right times #######################
+            ##############################################################################################################
             
+            ########### For dealing wth adaptive B- rank : append and recompute at right times #######################
+            ## because we are putting this right after the communication which hapens when (m not in self.size_0_of_LL_Kfactors_G) and (self.steps % self.TInv == 0)
+            ## we get that all d_a and d_g are the same across all GPUs, so all the prev _svd_trunc_error are the same across all gpus 
+            ## and thus the allocation will be the same across all GPUs - which si what we want - otherwise it gets buggy
+            if self.adaptable_B_rank == True and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                if m in self.size_0_of_LL_Kfactors_A: 
+                    # if we do adaptable rank thing, save the rank and error data/statistics
+                    ####### A: append rank and errors #### since done after communication we have global info everywhere ##########
+                    if self.steps == 0:
+                        ####### A: append rank and errors ######################################
+                        self.all_prev_B_trunc_errs_a[m] = [ (self.d_a[m][-1])/(self.d_a[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_B_used_ranks_a[m] = [ self.d_a[m].shape[0] ]
+                    else:
+                        ####### A: append rank and errors ######################################
+                        self.all_prev_B_trunc_errs_a[m].append( (self.d_a[m][-1])/(self.d_a[m][0]) )
+                        self.all_prev_B_used_ranks_a[m].append(self.d_a[m].shape[0])
+                    ####### END: A & G: append rank and errors #########################################################################
+                        
+                    #### avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    # we do this to keep information recent and also to limit memory usage and computation
+                    if len(self.all_prev_B_trunc_errs_a) > self.B_adaptive_max_history:
+                        # all lists below hae always the same length, so do it accordingly on all lists
+                        self.all_prev_B_trunc_errs_a[m] = self.all_prev_B_trunc_errs_a[m][-self.B_adaptive_max_history:]
+                        self.all_prev_B_used_ranks_a[m] = self.all_prev_B_used_ranks_a[m][-self.B_adaptive_max_history:]
+                    #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    
+                    # Start: compute new ranks #########
+                    if self.steps != 0 and (self.steps % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier)) == 0:
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
+                        self.current_B_ranks_a[m] = get_new_B_rank(self.all_prev_B_trunc_errs_a[m], self.all_prev_B_used_ranks_a[m], 
+                                                                         max_rank = min(self.maximum_ever_admissible_B_rank, self.Q_a[m].shape[0]), #tensor_size = self.Q_a[m].shape[0],
+                                                                         target_rel_err = self.B_target_truncation_rel_err,
+                                                                         TInv_multiplier = self.B_rank_adaptation_TInv_multiplier)
+                if m in self.size_0_of_LL_Kfactors_G: 
+                    # if we do adaptable rank thing, save the rank and error data/statistics
+                    ####### G: append rank and errors #### since done after communication we have global info everywhere ##########
+                    if self.steps == 0:
+                        ####### G: append rank and errors ######################################
+                        self.all_prev_B_trunc_errs_g[m] = [ (self.d_g[m][-1])/(self.d_g[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_B_used_ranks_g[m] = [ self.d_g[m].shape[0] ]
+                    else:
+                        ####### G: append rank and errors ######################################
+                        self.all_prev_B_trunc_errs_g[m].append( (self.d_g[m][-1])/(self.d_g[m][0]) )
+                        self.all_prev_B_used_ranks_g[m].append(self.d_g[m].shape[0])
+                    ####### END: A & G: append rank and errors #########################################################################
+                        
+                    #### avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    # we do this to keep information recent and also to limit memory usage and computation
+                    if len(self.all_prev_B_trunc_errs_g) > self.B_adaptive_max_history:
+                        # all lists below hae always the same length, so do it accordingly on all lists
+                        self.all_prev_B_trunc_errs_g[m] = self.all_prev_B_trunc_errs_g[m][-self.B_adaptive_max_history:]
+                        self.all_prev_B_used_ranks_g[m] = self.all_prev_B_used_ranks_g[m][-self.B_adaptive_max_history:]
+                    #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    
+                    # Start: compute new ranks #########
+                    if self.steps != 0 and (self.steps % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier)) == 0:
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
+                        self.current_B_ranks_g[m] = get_new_B_rank(self.all_prev_rsvd_trunc_errs_g[m], self.all_prev_B_used_ranks_g[m], 
+                                                                         max_rank = min(self.maximum_ever_admissible_B_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],
+                                                                         target_rel_err = self.B_target_truncation_rel_err,
+                                                                         TInv_multiplier = self.B_rank_adaptation_TInv_multiplier)
+                #debug print
+                print('\n self.rank = {}: \n self.current_B_ranks_a = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.current_B_ranks_a, self.current_B_ranks_g))
+            ####### END : For dealing wth adaptive B- rank : append and recompute at right times #######################
+            ##############################################################################################################            
+                        
             p_grad_mat = self._get_matrix_form_grad(m, classname)
             v = self._get_natural_grad(m, p_grad_mat, damping)
             updates[m] = v
