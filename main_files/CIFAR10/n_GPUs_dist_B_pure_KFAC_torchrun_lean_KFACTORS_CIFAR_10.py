@@ -234,6 +234,7 @@ def main(world_size, args):
                                 rsvd_adaptive_max_history = rsvd_adaptive_max_history,
                                 rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
                                 # for dealing with adaptable B rank
+                                adaptable_B_rank = adaptable_B_rank,
                                 B_rank_adaptation_T_brand_updt_multiplier = B_rank_adaptation_T_brand_updt_multiplier,
                                 B_target_truncation_rel_err = B_target_truncation_rel_err,
                                 maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank,    

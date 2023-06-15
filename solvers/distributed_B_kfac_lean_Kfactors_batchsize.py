@@ -51,7 +51,7 @@ class B_KFACOptimizer(optim.Optimizer):
                  rsvd_rank_adaptation_TInv_multiplier = 5,
                  rsvd_adaptive_max_history = 30,
                  # for adaptive B- rank
-                 adaptable_B_rank = True,
+                 adaptable_B_rank = False,
                  B_target_truncation_rel_err = 0.033,
                  maximum_ever_admissible_B_rank = 500,
                  B_rank_adaptation_T_brand_updt_multiplier = 1,
