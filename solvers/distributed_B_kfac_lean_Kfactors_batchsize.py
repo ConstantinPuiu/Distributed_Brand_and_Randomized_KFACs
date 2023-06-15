@@ -177,7 +177,8 @@ class B_KFACOptimizer(optim.Optimizer):
         self.all_prev_rsvd_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_rsvd_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
         if self.adaptable_rsvd_rank == True:
-            self.aa_for_reinit = {}; self.gg_for_reinit = {}
+            # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
+            self.aa_for_reinit = {}; self.gg_for_reinit = {} 
         #### end: for adaptable rsvd rank ####
         
         self._prepare_model()
@@ -231,6 +232,8 @@ class B_KFACOptimizer(optim.Optimizer):
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                             
                 elif module in self.size_0_of_CaSL_Kfactors_A: # the keys of this dict are all the CaSL layers
+                    if self.adaptable_rsvd_rank == True:
+                        self.aa_for_reinit[module] = aa
                     # for non LL layers, save m_aa and pass (inversion will happen later)
                     #strictly speaking this elif could be simple "else" if all works correctly elsewhere (because the 2 sets are a partition of the total set of registered modules), but we use elif to make it explicit
                     if module in self.initalloc_modules_for_this_rank_A[self.rank]:
@@ -328,6 +331,8 @@ class B_KFACOptimizer(optim.Optimizer):
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                             
                 elif module in self.size_0_of_CaSL_Kfactors_G: # for non LL layers, save m_gg and pass (inversion will happen later)
+                    if self.adaptable_rsvd_rank == True:
+                        self.gg_for_reinit[module] = gg
                     #strictly speaking this elif could be simple "else" if all works correctly elsewhere (because the 2 sets are a partition of the total set of registered modules), but we use elif to make it explicit
                     if module in self.initalloc_modules_for_this_rank_G[self.rank]:
                         self.m_gg[module] = (1 - self.stat_decay) * gg + 0
@@ -424,14 +429,21 @@ class B_KFACOptimizer(optim.Optimizer):
         ##### end choose hich list to look into #############################
             
         # ================ AA^T KFACTORS ===================================
-        if (m in list_to_check_in_A) and (m in self.size_0_of_CaSL_Kfactors_A):
-            """Do eigen decomposition for computing inverse of the ~ fisher.
-            :param m: The layer
-            :return: no returns.
-            """
+        if (m in list_to_check_in_A) and (m in self.size_0_of_CaSL_Kfactors_A): # if module is allocated to this GPU and is CaSL
+            """Do RSVD decomposition for computing inverse of the ~ fisher. """
             eps = 1e-10  # for numerical stability
-            oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
-            actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
+            
+            #### A: select correct target (adaptive) RSVD rank ################
+            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rank_adaptation_TInv_multiplier):
+                oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
+                actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
+            else:
+                #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
+                ics = self.current_rsvd_ranks_a[m]
+                oversampled_rank = min(self.m_aa[m].shape[0], ics + self.oversampling_parameter)
+                actual_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] )
+            #### END: A: select correct target (adaptive) RSVD rank ################
+            
             self.U_aa[m], self.D_aa[m], self.V_aa[m] = torch.svd_lowrank(self.m_aa[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
             self.Q_a[m] = self.V_aa[m][:,:actual_rank] + 0.0 # 0.5*(self.U_aa[m][:,:actual_rank] + self.V_aa[m][:,:actual_rank]); 
             del self.U_aa[m]; del self.V_aa[m]
@@ -443,6 +455,11 @@ class B_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
+                
+        elif (m in self.size_0_of_CaSL_Kfactors_A) and (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
+            # reinitialize the lazy tensors to have a shape corresponding to the newly chosen rank
+            actual_rank = min(self.Q_a[m].shape[0], self.current_rsvd_ranks_a[m])
+            self.d_a[m] = 0 * self.aa_for_reinit[m][0,:actual_rank]; self.Q_a[m] = 0 * self.aa_for_reinit[m][:,:actual_rank]
         elif m in self.size_0_of_CaSL_Kfactors_A: # the keys of this dictionary are all the CASL modules
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -450,10 +467,18 @@ class B_KFACOptimizer(optim.Optimizer):
         # ====  END  ======== AA^T KFACTORS ===================================
         
         # ================ GG^T KFACTORS ===================================
-        if (m in list_to_check_in_G) and (m in self.size_0_of_CaSL_Kfactors_G):
+        if (m in list_to_check_in_G) and (m in self.size_0_of_CaSL_Kfactors_G): # if module is allocated to this GPU and is CaSL
             eps = 1e-10  # for numerical stability
-            oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
-            actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
+            
+            #### G: select correct target (adaptive) RSVD rank ################
+            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rank_adaptation_TInv_multiplier):
+                oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
+                actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
+            else: 
+                oversampled_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m] + self.oversampling_parameter)
+                actual_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m])
+            #### end G : select correct target (adaptive) RSVD rank ################
+            
             self.U_gg[m], self.D_gg[m], self.V_gg[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M=None) # this is rsvd
             self.Q_g[m] = self.V_gg[m][:,:actual_rank] + 0.0 # 0.5 * ( self.U_gg[m][:,:actual_rank] + self.V_gg[m][:,:actual_rank]);
             del self.U_gg[m]; del self.V_gg[m]
@@ -465,6 +490,10 @@ class B_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
+        elif (m in self.size_0_of_CaSL_Kfactors_G) and (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
+            # reinitialize the lazy tensors to have a shape corresponding to the newly chosen rank
+            actual_rank = min(self.Q_g[m].shape[0], self.current_rsvd_ranks_g[m])
+            self.d_g[m] = 0 * self.gg_for_reinit[m][0,:actual_rank]; self.Q_g[m] = 0 * self.gg_for_reinit[m][:,:actual_rank]
         elif m in self.size_0_of_CaSL_Kfactors_G:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -647,6 +676,9 @@ class B_KFACOptimizer(optim.Optimizer):
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_g={}, size_d_g = {}, Q_g = {}, size_Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.d_g[m].shape, self.Q_g[m], self.Q_g[m].shape))
             
             ########### For dealing wth adaptive RSVD rank : append and recompute at right times #######################
+            ## because we are putting this right after the communication which hapens when (m not in self.size_0_of_LL_Kfactors_G) and (self.steps % self.TInv == 0)
+            ## we get that all d_a and d_g are the same across all GPUs, so all the prev _svd_trunc_error are the same across all gpus 
+            ## and thus the allocation will be the same across all GPUs - which si what we want - otherwise it gets buggy
             if self.adaptable_rsvd_rank == True and self.steps % self.TInv == 0:
                 if m in self.size_0_of_CaSL_Kfactors_A: 
                     # if we do adaptable rank thing, save the rank and error data/statistics
@@ -672,7 +704,6 @@ class B_KFACOptimizer(optim.Optimizer):
                     # Start: compute new ranks #########
                     if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
-                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
                         self.current_rsvd_ranks_a[m] = get_new_rsvd_rank(self.all_prev_rsvd_trunc_errs_a[m], self.all_prev_rsvd_used_ranks_a[m], 
                                                                          max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_a[m].shape[0]), #tensor_size = self.Q_a[m].shape[0],
                                                                          target_rel_err = self.rsvd_target_truncation_rel_err,
@@ -700,7 +731,6 @@ class B_KFACOptimizer(optim.Optimizer):
                     
                     # Start: compute new ranks #########
                     if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
-                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
                         #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
                         self.current_rsvd_ranks_g[m] = get_new_rsvd_rank(self.all_prev_rsvd_trunc_errs_g[m], self.all_prev_rsvd_used_ranks_g[m], 
                                                                          max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],

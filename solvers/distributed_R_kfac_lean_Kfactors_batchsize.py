@@ -151,7 +151,8 @@ class R_KFACOptimizer(optim.Optimizer):
         self.all_prev_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_rsvd_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
         if self.adaptable_rsvd_rank == True:
-            self.aa_for_reinit = {}; self.gg_for_reinit = {}
+            # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
+            self.aa_for_reinit = {}; self.gg_for_reinit = {} 
         # for the 2 dictionaries above: deallocated modules will be deleted; newly allocated modules will be added and have FEWER elements
         
         # prepare model, and also allocate work across GPUs
@@ -395,7 +396,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
         
         elif (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
-            # This is the first time we enter the HOOKS at TCov multiple AFTER a new TARGET-RANK reevaluation
+            # reinitialize the lazy tensors to have a shape corresponding to the newly chosen rank
             actual_rank = min(self.Q_a[m].shape[0], self.current_rsvd_ranks_a[m])
             self.d_a[m] = 0 * self.aa_for_reinit[m][0,:actual_rank]; self.Q_a[m] = 0 * self.aa_for_reinit[m][:,:actual_rank]
             self.time_measurement_alloc_for_lazy_A_or_G(m, Kfactor_type = 'A')
@@ -443,7 +444,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
         elif (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
-            # This is when we need to reset the shape f Q and d due to changing the rsvd target rank!
+            # reinitialize the lazy tensors to have a shape corresponding to the newly chosen rank
             actual_rank = min(self.Q_g[m].shape[0], self.current_rsvd_ranks_g[m])
             self.d_g[m] = 0 * self.gg_for_reinit[m][0,:actual_rank]; self.Q_g[m] = 0 * self.gg_for_reinit[m][:,:actual_rank]
             self.time_measurement_alloc_for_lazy_A_or_G(m, Kfactor_type = 'G')
