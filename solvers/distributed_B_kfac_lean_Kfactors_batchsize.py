@@ -623,8 +623,9 @@ class B_KFACOptimizer(optim.Optimizer):
         
         #### 1. Change work allocation or 2. rearrange variables maintaining the same wokr alloation (2 is there to simply integrate the case of choosing trivial alloc vs efficient allocation)
         #### change work allocation to dimension-based for RSVD
-        start_reschedule_time = time.time()
+        
         if self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == True:
+            if self.debugger_rescheduler_timing == True: start_reschedule_time = time.time()
             ############## Reallocate RSVD work (CaSL layers) ############################
             self.CaSL_modules_for_this_rank_A, self.CaSL_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
                                                                                     size_0_of_all_Kfactors_G = self.size_0_of_CaSL_Kfactors_G,
@@ -653,9 +654,11 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                                     batch_size = self.batch_size)
             ### Qs and Ds will be automatically set to zero (for appropriate all_reduce) at the correect time, so we don't have to do this again
             ############ END REALLOCATE B-update WORK (CASL LAYERS) #########################
+            if self.debugger_rescheduler_timing == True: end_reschedule_time = time.time()
             
                     
         elif self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == False:
+            if self.debugger_rescheduler_timing == True: start_reschedule_time = time.time()
             ## if we don't want to reallocate in an efficient way, we still need to split each allocated list we have into 1 for LL and 1 for CaSL
             ### 1. construct self.LL_modules_for_this_rank_A and self.CaSL_modules_for_this_rank_A dictionaries
             for key_rank in self.initalloc_modules_for_this_rank_A:
@@ -680,7 +683,8 @@ class B_KFACOptimizer(optim.Optimizer):
                     elif module_allocated in self.size_0_of_CaSL_Kfactors_G: # the keys of this dict are all the CaSL layers
                         #if it's CaSL, allocate to the same rank, but put in the correct dictionary
                         self.CaSL_modules_for_this_rank_G[key_rank].append(module_allocated)
-        end_reschedule_time = time.time()
+            if self.debugger_rescheduler_timing == True: end_reschedule_time = time.time()
+        
         if self.debugger_rescheduler_timing == True and self.steps == 0:
             print('RANK {} Took {} s to reschedule and self.work_alloc_propto_RSVD_and_B_cost == {}'.format(self.rank, end_reschedule_time - start_reschedule_time , self.work_alloc_propto_RSVD_and_B_cost))
         self._step(closure)
