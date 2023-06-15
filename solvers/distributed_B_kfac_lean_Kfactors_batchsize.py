@@ -724,7 +724,8 @@ class B_KFACOptimizer(optim.Optimizer):
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_a={}, size_d_a = {}, Q_a = {}, size_Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.d_a[m].shape, self.Q_a[m], self.Q_a[m].shape))
                 #print('RANK {}. Doing line: dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
-                if m in self.size_0_of_LL_Kfactors_A: print('\n\nrank = {}, step# = {}, self.d_a[m].shape = {}\n\n'.format(self.rank, self.steps, self.d_a[m].shape))
+                #if m in self.size_0_of_LL_Kfactors_A: 
+                print('\n\nrank = {}, step# = {}, module = {} :: self.d_a[m].shape = {}\n\n'.format(self.rank, self.steps, m, self.d_a[m].shape))
                 handle = dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_a[m] = 0 * self.d_a[m] + 1
