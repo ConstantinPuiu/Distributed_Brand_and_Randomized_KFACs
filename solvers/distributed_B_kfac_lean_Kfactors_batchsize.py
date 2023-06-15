@@ -767,6 +767,8 @@ class B_KFACOptimizer(optim.Optimizer):
             ##############################################################################################################
             
             ########### For dealing wth adaptive B- rank : append and recompute at right times #######################
+            ## ========= >>>>> NOTE THAT FOR B-UPDATE WE INHERIT AN ASCENDING EIGENVALUES ORDER FROM TORCH.LINALG.EIGH<<<<<<<< ===== ###
+            ##               so the ratios ARE d[0]/d[-1] = d_smallest / d_largest                                                   ###
             ## because we are putting this right after the communication which hapens when (m not in self.size_0_of_LL_Kfactors_G) and (self.steps % self.TInv == 0)
             ## we get that all d_a and d_g are the same across all GPUs, so all the prev _svd_trunc_error are the same across all gpus 
             ## and thus the allocation will be the same across all GPUs - which si what we want - otherwise it gets buggy
@@ -776,11 +778,11 @@ class B_KFACOptimizer(optim.Optimizer):
                     ####### A: append rank and errors #### since done after communication we have global info everywhere ##########
                     if self.steps == 0:
                         ####### A: append rank and errors ######################################
-                        self.all_prev_B_trunc_errs_a[m] = [ (self.d_a[m][-1])/(self.d_a[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_B_trunc_errs_a[m] = [ (self.d_a[m][0])/(self.d_a[m][-1]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
                         self.all_prev_B_used_ranks_a[m] = [ self.d_a[m].shape[0] ]
                     else:
                         ####### A: append rank and errors ######################################
-                        self.all_prev_B_trunc_errs_a[m].append( (self.d_a[m][-1])/(self.d_a[m][0]) )
+                        self.all_prev_B_trunc_errs_a[m].append( (self.d_a[m][0])/(self.d_a[m][-1]) )
                         self.all_prev_B_used_ranks_a[m].append(self.d_a[m].shape[0])
                     ####### END: A & G: append rank and errors #########################################################################
                         
@@ -804,11 +806,11 @@ class B_KFACOptimizer(optim.Optimizer):
                     ####### G: append rank and errors #### since done after communication we have global info everywhere ##########
                     if self.steps == 0:
                         ####### G: append rank and errors ######################################
-                        self.all_prev_B_trunc_errs_g[m] = [ (self.d_g[m][-1])/(self.d_g[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_B_trunc_errs_g[m] = [ (self.d_g[m][0])/(self.d_g[m][-1]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
                         self.all_prev_B_used_ranks_g[m] = [ self.d_g[m].shape[0] ]
                     else:
                         ####### G: append rank and errors ######################################
-                        self.all_prev_B_trunc_errs_g[m].append( (self.d_g[m][-1])/(self.d_g[m][0]) )
+                        self.all_prev_B_trunc_errs_g[m].append( (self.d_g[m][0])/(self.d_g[m][-1]) )
                         self.all_prev_B_used_ranks_g[m].append(self.d_g[m].shape[0])
                     ####### END: A & G: append rank and errors #########################################################################
                         
