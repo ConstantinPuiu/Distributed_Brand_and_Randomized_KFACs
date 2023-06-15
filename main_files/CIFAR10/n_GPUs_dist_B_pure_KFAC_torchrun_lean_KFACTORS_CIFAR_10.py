@@ -135,6 +135,17 @@ def main(world_size, args):
     brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
     # ====================================================
     
+    ### rsvd adaptive rank ##########
+    if args.adaptable_rsvd_rank == 0:
+        adaptable_rsvd_rank = False
+    else:
+        adaptable_rsvd_rank = True
+    rank_adaptation_TInv_multiplier = args.rank_adaptation_TInv_multiplier
+    rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
+    maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
+    rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
+    # ====================================================
+    
     #### for selcting net type ##############
     net_type = args.net_type
     #########################################
@@ -204,7 +215,13 @@ def main(world_size, args):
                                 brand_r_target_excess = brand_r_target_excess,
                                 brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
                                 B_truncate_before_inversion = B_truncate_before_inversion,
-                                work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost)#    optim.SGD(model.parameters(),
+                                work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost,
+                                # for dealing with adaptable rsvd rank
+                                adaptable_rsvd_rank = adaptable_rsvd_rank,
+                                rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
+                                maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
+                                rsvd_adaptive_max_history = rsvd_adaptive_max_history,
+                                rank_adaptation_TInv_multiplier = rank_adaptation_TInv_multiplier)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -286,6 +303,13 @@ def parse_args():
     
     #### added to allow for B-truncating just before inversion as well
     parser.add_argument('--B_truncate_before_inversion', type=int, default=0, help='Do we want to B-truncate just before inversion (more speed less accuracy) If so set to 1 (or anything other than 0). Standard way to deal with bools wiht buggy argparser that only work correctly wiht numbers!' ) 
+    
+    #### added to dal with RSVD adaptable rank
+    parser.add_argument('--adaptable_rsvd_rank', type=int, default=1, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--rsvd_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in rsvd: the ran will adapt to be around this error (but rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank)' ) 
+    parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
+    parser.add_argument('--rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
+    parser.add_argument('--rsvd_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
     
     ### for selecting net type
     parser.add_argument('--net_type', type=str, default = 'Conv', help = 'type of net: Conv (gives VGG16_bn less maxpool) or FC (gives an adhoc FC net)' )

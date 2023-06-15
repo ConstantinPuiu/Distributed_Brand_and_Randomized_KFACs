@@ -118,7 +118,7 @@ def main(world_size, args):
     rsvd_niter = args.rsvd_niter
     damping_type = args.damping_type #'adaptive',
     clip_type = args.clip_type
-    rank_adaptation_TInv_multiplier = args.rank_adaptation_TInv_multiplier
+    
     
     ###others only added after starting CIFAR10
     n_epochs = args.n_epochs
@@ -141,6 +141,7 @@ def main(world_size, args):
         adaptable_rsvd_rank = False
     else:
         adaptable_rsvd_rank = True
+    rank_adaptation_TInv_multiplier = args.rank_adaptation_TInv_multiplier
     rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
     maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
     rsvd_adaptive_max_history = args.rsvd_adaptive_max_history

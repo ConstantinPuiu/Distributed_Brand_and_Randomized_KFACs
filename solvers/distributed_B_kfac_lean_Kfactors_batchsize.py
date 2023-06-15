@@ -20,6 +20,8 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_RSVD_inversion_work_same_fixed_r
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import allocate_B_inversion_work_same_fixed_r_and_batchsize
 
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank
+
 class B_KFACOptimizer(optim.Optimizer):
     def __init__(self,
                  model,
@@ -41,7 +43,13 @@ class B_KFACOptimizer(optim.Optimizer):
                  brand_r_target_excess = 0,
                  brand_update_multiplier_to_TCov = 1,
                  B_truncate_before_inversion = False,
-                 work_alloc_propto_RSVD_and_B_cost = True):
+                 work_alloc_propto_RSVD_and_B_cost = True,
+                 # for adaptive rsvd rank
+                 adaptable_rsvd_rank = True,
+                 rsvd_target_truncation_rel_err = 0.033,
+                 maximum_ever_admissible_rsvd_rank = 700,
+                 rank_adaptation_TInv_multiplier = 5,
+                 rsvd_adaptive_max_history = 30):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -151,6 +159,26 @@ class B_KFACOptimizer(optim.Optimizer):
         ### number of Kfactors updates stored for each kfactor: dictionaries
         self.nkfu_dict_a = {} # these will be different on each GPU, but that's not a concern. Each GPU will have the correct values for its tracked modules
         self.nkfu_dict_g = {}
+        
+        #### for adaptable rsvd rank ####
+        # using an adaptable rank will also come with a limit on the maximum usable ank ever, 
+        # otherwise we might just revert to EVD in some cases, and we don't want taht
+        # the aim of adaptable rank is to choose the rank to have the truncation error roughly to our desired threshold, 
+        # but we saccrifice truncation error if we need to keep too many modes
+        self.adaptable_rsvd_rank = adaptable_rsvd_rank
+        self.rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err
+        self.maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank     
+        self.rank_adaptation_TInv_multiplier = rank_adaptation_TInv_multiplier
+        self.rsvd_adaptive_max_history = rsvd_adaptive_max_history # units of elements in list (one element comes every TInv iters)
+        self.current_rsvd_ranks_a = {} # dictionary where key is module, and value is the current rank of rsvd for that module for A Kfactor
+        self.current_rsvd_ranks_g = {} # dictionary where key is module, and value is the current rank of rsvd for that module for G Kfactor
+        self.all_prev_rsvd_trunc_errs_a = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_rsvd_used_ranks_a = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_rsvd_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
+        self.all_prev_rsvd_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
+        if self.adaptable_rsvd_rank == True:
+            self.aa_for_reinit = {}; self.gg_for_reinit = {}
+        #### end: for adaptable rsvd rank ####
         
         self._prepare_model()
         
@@ -584,6 +612,7 @@ class B_KFACOptimizer(optim.Optimizer):
         for m in self.modules:
             classname = m.__class__.__name__
             if ((m not in self.size_0_of_LL_Kfactors_A) and (self.steps % self.TInv == 0)) or ((m in self.size_0_of_LL_Kfactors_A) and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0)):
+                # m not in self.size_0_of_LL_Kfactors_A should be perfectly equivalent to m in self.size_0_of_CaSL_Kfactors_A
                 # if the inversion was done locally this turn, allreduce to disseminate inverse representation
                 #if it's time to recompute inverse for Conv layers or for liear (BRAND) layers
                 if self.dist_comm_for_layers_debugger:
@@ -616,6 +645,69 @@ class B_KFACOptimizer(optim.Optimizer):
                 #self.Q_g[m][torch.arange(Q_debug_size),torch.arange(Q_debug_size)] = 1 # make Q_g identity to avoid comunication
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_g={}, size_d_g = {}, Q_g = {}, size_Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.d_g[m].shape, self.Q_g[m], self.Q_g[m].shape))
+            
+            ########### For dealing wth adaptive RSVD rank : append and recompute at right times #######################
+            if self.adaptable_rsvd_rank == True and self.steps % self.TInv == 0:
+                if m in self.size_0_of_CaSL_Kfactors_A: 
+                    # if we do adaptable rank thing, save the rank and error data/statistics
+                    ####### A: append rank and errors #### since done after communication we have global info everywhere ##########
+                    if self.steps == 0:
+                        ####### A: append rank and errors ######################################
+                        self.all_prev_rsvd_trunc_errs_a[m] = [ (self.d_a[m][-1])/(self.d_a[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_rsvd_used_ranks_a[m] = [ self.d_a[m].shape[0] ]
+                    else:
+                        ####### A: append rank and errors ######################################
+                        self.all_prev_rsvd_trunc_errs_a[m].append( (self.d_a[m][-1])/(self.d_a[m][0]) )
+                        self.all_prev_rsvd_used_ranks_a[m].append(self.d_a[m].shape[0])
+                    ####### END: A & G: append rank and errors #########################################################################
+                        
+                    #### avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    # we do this to keep information recent and also to limit memory usage and computation
+                    if len(self.all_prev_rsvd_trunc_errs_a) > self.rsvd_adaptive_max_history:
+                        # all lists below hae always the same length, so do it accordingly on all lists
+                        self.all_prev_rsvd_trunc_errs_a[m] = self.all_prev_rsvd_trunc_errs_a[m][-self.rsvd_adaptive_max_history:]
+                        self.all_prev_rsvd_used_ranks_a[m] = self.all_prev_rsvd_used_ranks_a[m][-self.rsvd_adaptive_max_history:]
+                    #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    
+                    # Start: compute new ranks #########
+                    if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
+                        self.current_rsvd_ranks_a[m] = get_new_rsvd_rank(self.all_prev_rsvd_trunc_errs_a[m], self.all_prev_rsvd_used_ranks_a[m], 
+                                                                         max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_a[m].shape[0]), #tensor_size = self.Q_a[m].shape[0],
+                                                                         target_rel_err = self.rsvd_target_truncation_rel_err,
+                                                                         TInv_multiplier = self.rank_adaptation_TInv_multiplier)
+                elif m in self.size_0_of_CaSL_Kfactors_G: 
+                    # if we do adaptable rank thing, save the rank and error data/statistics
+                    ####### G: append rank and errors #### since done after communication we have global info everywhere ##########
+                    if self.steps == 0:
+                        ####### G: append rank and errors ######################################
+                        self.all_prev_rsvd_trunc_errs_g[m] = [ (self.d_g[m][-1])/(self.d_g[m][0]) ] # as versions change, check the sorting is still "for granted" in torch.svd_lowrank
+                        self.all_prev_rsvd_used_ranks_g[m] = [ self.d_g[m].shape[0] ]
+                    else:
+                        ####### G: append rank and errors ######################################
+                        self.all_prev_rsvd_trunc_errs_g[m].append( (self.d_g[m][-1])/(self.d_g[m][0]) )
+                        self.all_prev_rsvd_used_ranks_g[m].append(self.d_g[m].shape[0])
+                    ####### END: A & G: append rank and errors #########################################################################
+                        
+                    #### avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    # we do this to keep information recent and also to limit memory usage and computation
+                    if len(self.all_prev_rsvd_trunc_errs_g) > self.rsvd_adaptive_max_history:
+                        # all lists below hae always the same length, so do it accordingly on all lists
+                        self.all_prev_rsvd_trunc_errs_g[m] = self.all_prev_rsvd_trunc_errs_g[m][-self.rsvd_adaptive_max_history:]
+                        self.all_prev_rsvd_used_ranks_g[m] = self.all_prev_rsvd_used_ranks_g[m][-self.rsvd_adaptive_max_history:]
+                    #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
+                    
+                    # Start: compute new ranks #########
+                    if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
+                        #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
+                        self.current_rsvd_ranks_g[m] = get_new_rsvd_rank(self.all_prev_rsvd_trunc_errs_g[m], self.all_prev_rsvd_used_ranks_g[m], 
+                                                                         max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],
+                                                                         target_rel_err = self.rsvd_target_truncation_rel_err,
+                                                                         TInv_multiplier = self.rank_adaptation_TInv_multiplier)
+            ####### END : For dealing wth adaptive RSVD rank : append and recompute at right times #######################
+            
             p_grad_mat = self._get_matrix_form_grad(m, classname)
             v = self._get_natural_grad(m, p_grad_mat, damping)
             updates[m] = v
