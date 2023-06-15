@@ -328,7 +328,8 @@ class B_KFACOptimizer(optim.Optimizer):
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                         if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
                             actual_rank = self.current_B_ranks_a[module]
-                            self.Q_a[module] = 0 * self.aa_for_reinit[module][:,:actual_rank]; self.d_a[module] = 0 * self.Q_a[module][0,:]
+                            self.Q_a[module] = 0 * self.aa_for_reinit[module][:,:actual_rank]; self.Q_a[module] = self.Q_a[module].contiguous()
+                            self.d_a[module] = 0 * self.Q_a[module][0,:]; self.d_a[module] = self.d_a[module].contiguous()
                         else:
                             self.d_a[module] = 0 * self.d_a[module]; self.Q_a[module] = 0 * self.Q_a[module]
                         self.nkfu_dict_a[module] += 1
@@ -449,8 +450,9 @@ class B_KFACOptimizer(optim.Optimizer):
                         # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                         if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
-                            actual_rank = self.current_B_ranks_a[module]
-                            self.Q_g[module] = 0 * self.gg_for_reinit[module][:,:actual_rank]; self.d_g[module] = 0 * self.Q_g[module][0,:]
+                            actual_rank = self.current_B_ranks_g[module]
+                            self.Q_g[module] = 0 * self.gg_for_reinit[module][:,:actual_rank]; self.Q_g[module] = self.Q_g[module].contiguous()
+                            self.d_g[module] = 0 * self.Q_g[module][0,:]; self.d_g[module] = self.d_g[module].contiguous()
                         else:
                             self.d_g[module] = 0 * self.d_g[module]; self.Q_g[module] = 0 * self.Q_g[module]
                         self.nkfu_dict_g[module] += 1
@@ -725,7 +727,7 @@ class B_KFACOptimizer(optim.Optimizer):
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_a={}, size_d_a = {}, Q_a = {}, size_Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.d_a[m].shape, self.Q_a[m], self.Q_a[m].shape))
                 #print('RANK {}. Doing line: dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 #if m in self.size_0_of_LL_Kfactors_A: 
-                print('\n\nrank = {}, step# = {}, module = {} :: self.d_a[m].shape = {}\n\n'.format(self.rank, self.steps, m, self.d_a[m].shape))
+                print('\n\nrank = {}, step# = {}, module = {} :: self.d_a[m].shape = {};\nself.d_a[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_a[m].shape, self.d_a[m]))
                 handle = dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_a[m] = 0 * self.d_a[m] + 1
@@ -742,6 +744,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 #print('RANK {}. Doing line : dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_g={}, size_d_g = {}, Q_g = {}, size_Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.d_g[m].shape, self.Q_g[m], self.Q_g[m].shape))
+                print('\n\nrank = {}, step# = {}, module = {} :: self.d_g[m].shape = {};\nself.d_g[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_g[m].shape, self.d_g[m]))
                 handle = dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_g[m] = 0 * self.d_g[m] + 1
