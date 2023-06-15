@@ -48,8 +48,14 @@ class B_KFACOptimizer(optim.Optimizer):
                  adaptable_rsvd_rank = True,
                  rsvd_target_truncation_rel_err = 0.033,
                  maximum_ever_admissible_rsvd_rank = 700,
-                 rank_adaptation_TInv_multiplier = 5,
-                 rsvd_adaptive_max_history = 30):
+                 rsvd_rank_adaptation_TInv_multiplier = 5,
+                 rsvd_adaptive_max_history = 30,
+                 # for adaptive B- rank
+                 adaptable_B_rank = True,
+                 B_target_truncation_rel_err = 0.033,
+                 maximum_ever_admissible_B_rank = 500,
+                 B_rank_adaptation_TInv_multiplier = 5,
+                 B_rsvd_adaptive_max_history = 30):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -169,7 +175,7 @@ class B_KFACOptimizer(optim.Optimizer):
         self.adaptable_rsvd_rank = adaptable_rsvd_rank
         self.rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err
         self.maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank     
-        self.rank_adaptation_TInv_multiplier = rank_adaptation_TInv_multiplier
+        self.rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier
         self.rsvd_adaptive_max_history = rsvd_adaptive_max_history # units of elements in list (one element comes every TInv iters)
         self.current_rsvd_ranks_a = {} # dictionary where key is module, and value is the current rank of rsvd for that module for A Kfactor
         self.current_rsvd_ranks_g = {} # dictionary where key is module, and value is the current rank of rsvd for that module for G Kfactor
@@ -435,7 +441,7 @@ class B_KFACOptimizer(optim.Optimizer):
             eps = 1e-10  # for numerical stability
             
             #### A: select correct target (adaptive) RSVD rank ################
-            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rank_adaptation_TInv_multiplier):
+            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier):
                 oversampled_rank = min(self.m_aa[m].shape[0], self.total_rsvd_rank)
                 actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
             else:
@@ -456,7 +462,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_a[m].shape, self.d_a[m].shape))
                 
-        elif (m in self.size_0_of_CaSL_Kfactors_A) and (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
+        elif (m in self.size_0_of_CaSL_Kfactors_A) and (self.steps - self.TInv) % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
             # reinitialize the lazy tensors to have a shape corresponding to the newly chosen rank
             actual_rank = min(self.Q_a[m].shape[0], self.current_rsvd_ranks_a[m])
             self.d_a[m] = 0 * self.aa_for_reinit[m][0,:actual_rank]; self.Q_a[m] = 0 * self.aa_for_reinit[m][:,:actual_rank]
@@ -471,7 +477,7 @@ class B_KFACOptimizer(optim.Optimizer):
             eps = 1e-10  # for numerical stability
             
             #### G: select correct target (adaptive) RSVD rank ################
-            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rank_adaptation_TInv_multiplier):
+            if self.adaptable_rsvd_rank == False or self.steps <= (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier):
                 oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
                 actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
             else:
@@ -490,7 +496,7 @@ class B_KFACOptimizer(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed EVD of module {} \n'.format(self.rank, self.world_size, m))
                 print('The shapes are Q_a.shape = {}, d_a.shape = {}'. format(self.Q_g[m].shape,self.d_g[m].shape))
-        elif (m in self.size_0_of_CaSL_Kfactors_G) and (self.steps - self.TInv) % (self.TInv * self.rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
+        elif (m in self.size_0_of_CaSL_Kfactors_G) and (self.steps - self.TInv) % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
             #print('\nself.rank = {} ::\n self.Q_g.keys() = {},\n\n self.current_rsvd_ranks_g = {},\n\n self.current_rsvd_ranks_a = {}\n'.format(self.rank, self.Q_g.keys(), self.current_rsvd_ranks_g, self.current_rsvd_ranks_a))
             #print('\nself.rank = {} ::\n self.size_0_of_CaSL_Kfactors_G = {}\n self.size_0_of_CaSL_Kfactors_A = {}\n'.format(self.rank,self.size_0_of_CaSL_Kfactors_G,self.size_0_of_CaSL_Kfactors_A))
             # reinitialize the lazy tensors to have a shape corresponding to the newly chosen rank
@@ -704,12 +710,12 @@ class B_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_a = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_a))
                         self.current_rsvd_ranks_a[m] = get_new_rsvd_rank(self.all_prev_rsvd_trunc_errs_a[m], self.all_prev_rsvd_used_ranks_a[m], 
                                                                          max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_a[m].shape[0]), #tensor_size = self.Q_a[m].shape[0],
                                                                          target_rel_err = self.rsvd_target_truncation_rel_err,
-                                                                         TInv_multiplier = self.rank_adaptation_TInv_multiplier)
+                                                                         TInv_multiplier = self.rsvd_rank_adaptation_TInv_multiplier)
                 if m in self.size_0_of_CaSL_Kfactors_G: 
                     # if we do adaptable rank thing, save the rank and error data/statistics
                     ####### G: append rank and errors #### since done after communication we have global info everywhere ##########
@@ -732,12 +738,12 @@ class B_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TInv * self.rank_adaptation_TInv_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.current_rsvd_ranks_g))
                         self.current_rsvd_ranks_g[m] = get_new_rsvd_rank(self.all_prev_rsvd_trunc_errs_g[m], self.all_prev_rsvd_used_ranks_g[m], 
                                                                          max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],
                                                                          target_rel_err = self.rsvd_target_truncation_rel_err,
-                                                                         TInv_multiplier = self.rank_adaptation_TInv_multiplier)
+                                                                         TInv_multiplier = self.rsvd_rank_adaptation_TInv_multiplier)
             ####### END : For dealing wth adaptive RSVD rank : append and recompute at right times #######################
             
             p_grad_mat = self._get_matrix_form_grad(m, classname)

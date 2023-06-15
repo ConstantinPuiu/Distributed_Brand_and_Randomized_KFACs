@@ -140,7 +140,7 @@ def main(world_size, args):
         adaptable_rsvd_rank = False
     else:
         adaptable_rsvd_rank = True
-    rank_adaptation_TInv_multiplier = args.rank_adaptation_TInv_multiplier
+    rsvd_rank_adaptation_TInv_multiplier = args.rsvd_rank_adaptation_TInv_multiplier
     rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
     maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
     rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
@@ -221,7 +221,7 @@ def main(world_size, args):
                                 rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
                                 maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
                                 rsvd_adaptive_max_history = rsvd_adaptive_max_history,
-                                rank_adaptation_TInv_multiplier = rank_adaptation_TInv_multiplier)#    optim.SGD(model.parameters(),
+                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -308,7 +308,7 @@ def parse_args():
     parser.add_argument('--adaptable_rsvd_rank', type=int, default = 0, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
     parser.add_argument('--rsvd_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in rsvd: the ran will adapt to be around this error (but rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank)' ) 
     parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
-    parser.add_argument('--rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
+    parser.add_argument('--rsvd_rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rsvd_rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
     parser.add_argument('--rsvd_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
     
     ### for selecting net type
@@ -323,7 +323,7 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for B-pure-KFAC lean with brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
-    print('Important args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rank_adaptation_TInv_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rank_adaptation_TInv_multiplier))
+    print('Important args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rsvd_rank_adaptation_TInv_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier))
     #print('type of brand_r_target_excess is {}'.format(type(args.brand_r_target_excess)))
     print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
