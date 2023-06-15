@@ -203,7 +203,8 @@ class B_KFACOptimizer(optim.Optimizer):
         self.all_prev_B_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
         if self.adaptable_B_rank == True:
             # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
-            raise NotImplementedError('Have to find a way to reinitialize the B quantities to keep up with the changing communicated rank')
+            #raise NotImplementedError('Have to find a way to reinitialize the B quantities to keep up with the changing communicated rank')
+            pass
         #### end: for adaptable B rank ####
         
         self._prepare_model()
