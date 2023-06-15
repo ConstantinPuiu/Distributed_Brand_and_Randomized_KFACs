@@ -151,7 +151,7 @@ def main(world_size, args):
         adaptable_B_rank = False
     else:
         adaptable_B_rank = True
-    B_rank_adaptation_TInv_multiplier = args.B_rank_adaptation_TInv_multiplier
+    B_rank_adaptation_T_brand_updt_multiplier = args.B_rank_adaptation_T_brand_updt_multiplier
     B_target_truncation_rel_err = args.B_target_truncation_rel_err
     maximum_ever_admissible_B_rank = args.maximum_ever_admissible_B_rank    
     B_adaptive_max_history = args.B_adaptive_max_history
@@ -234,7 +234,7 @@ def main(world_size, args):
                                 rsvd_adaptive_max_history = rsvd_adaptive_max_history,
                                 rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
                                 # for dealing with adaptable B rank
-                                B_rank_adaptation_TInv_multiplier = B_rank_adaptation_TInv_multiplier,
+                                B_rank_adaptation_T_brand_updt_multiplier = B_rank_adaptation_T_brand_updt_multiplier,
                                 B_target_truncation_rel_err = B_target_truncation_rel_err,
                                 maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank,    
                                 B_adaptive_max_history = B_adaptive_max_history
@@ -332,7 +332,7 @@ def parse_args():
     parser.add_argument('--adaptable_B_rank', type=int, default = 0, help='Set to any non-zero integer if we want B- adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
     parser.add_argument('--B_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in B-update_truncation: the rank will adapt to be around this error (but B-truncation rank has to be strictly below maximum_ever_admissible_B_rank and above 70. Unlike rsvd it is not above 10. That is because using B with very small truncation rank effectively means we carry no information from before, in which case B is pointless. If you need smaller minimum admissible value than 70, edit the corresponding function in the file adaptive_rank_utils.py)' ) 
     parser.add_argument('--maximum_ever_admissible_B_rank', type=int, default=500, help='B-truncation rank has to be strictly below maximum_ever_admissible_B_rank' ) 
-    parser.add_argument('--B_rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After B_rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
+    parser.add_argument('--B_rank_adaptation_T_brand_updt_multiplier', type = int, default = 5, help = 'After B_rank_adaptation_T_brand_updt_multiplier * TCov * brand_update_multiplier_TCov steps we reconsider ranks')
     parser.add_argument('--B_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
     
     ### for selecting net type
@@ -347,7 +347,7 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for B-pure-KFAC lean with brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
-    print('Important args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rsvd_rank_adaptation_TInv_multiplier = {};\n --adaptable_B_rank = {}; \n --B_rank_adaptation_TInv_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier,args.adaptable_B_rank, args.B_rank_adaptation_TInv_multiplier))
+    print('Important args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rsvd_rank_adaptation_TInv_multiplier = {};\n --adaptable_B_rank = {}; \n --B_rank_adaptation_T_brand_updt_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier,args.adaptable_B_rank, args.B_rank_adaptation_T_brand_updt_multiplier))
     #print('type of brand_r_target_excess is {}'.format(type(args.brand_r_target_excess)))
     print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size

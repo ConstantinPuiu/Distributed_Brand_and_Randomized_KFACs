@@ -54,7 +54,7 @@ class B_KFACOptimizer(optim.Optimizer):
                  adaptable_B_rank = True,
                  B_target_truncation_rel_err = 0.033,
                  maximum_ever_admissible_B_rank = 500,
-                 B_rank_adaptation_TInv_multiplier = 5,
+                 B_rank_adaptation_T_brand_updt_multiplier = 1,
                  B_adaptive_max_history = 30):
         
         if momentum < 0.0:
@@ -132,6 +132,7 @@ class B_KFACOptimizer(optim.Optimizer):
         #print('type of rsvd_rank is {}'.format(type(rsvd_rank)))
         self.brand_r_target = rsvd_rank + brand_r_target_excess
         self.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov
+        self.T_brand_updt = self.TCov * self.brand_update_multiplier_to_TCov
         self.sqr_1_minus_stat_decay = (1 - stat_decay)**(0.5) # to avoid recomputations
         self.batch_size = None
         self.B_truncate_before_inversion = B_truncate_before_inversion
@@ -183,7 +184,7 @@ class B_KFACOptimizer(optim.Optimizer):
         self.all_prev_rsvd_used_ranks_a = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_rsvd_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_rsvd_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
-        if self.adaptable_rsvd_rank == True:
+        if self.adaptable_rsvd_rank == True or adaptable_B_rank == True:
             # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
             self.aa_for_reinit = {}; self.gg_for_reinit = {} 
         #### end: for adaptable rsvd rank ####
@@ -192,8 +193,8 @@ class B_KFACOptimizer(optim.Optimizer):
         # why we may want this? similar logic to rsvd adaptable rank idea (sea above)
         self.adaptable_B_rank = adaptable_B_rank
         self.B_target_truncation_rel_err = B_target_truncation_rel_err
-        self.maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank     
-        self.B_rank_adaptation_TInv_multiplier = B_rank_adaptation_TInv_multiplier
+        self.maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank  
+        self.B_rank_adaptation_T_brand_updt_multiplier = B_rank_adaptation_T_brand_updt_multiplier
         self.B_adaptive_max_history = B_adaptive_max_history # units of elements in list (one element comes every TInv iters)
         self.current_B_ranks_a = {} # dictionary where key is module, and value is the current rank of rsvd for that module for A Kfactor
         self.current_B_ranks_g = {} # dictionary where key is module, and value is the current rank of rsvd for that module for G Kfactor
@@ -203,8 +204,11 @@ class B_KFACOptimizer(optim.Optimizer):
         self.all_prev_B_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
         if self.adaptable_B_rank == True:
             # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
-            #raise NotImplementedError('Have to find a way to reinitialize the B quantities to keep up with the changing communicated rank')
-            pass
+            # Had to find a way to reinitialize the B quantities to keep up with the changing communicated rank'
+            # the solution to the above is to use the self.aa_for_reinit = {}; self.gg_for_reinit = {}  approach took with rsvd, hence the or in the line above that line self.aa_for_reinit = {}; self.gg_for_reinit = {} 
+            # we could ave self.aa_for_reinit_rsvd and self.aa_for_reinit_B but that would be clumsy... sticking to just 1 aggregated dictionary
+            if self.maximum_ever_admissible_B_rank < self.brand_r_target and self.rank == 0:
+                print('\n\nWARNING: you have set self.brand_r_target ( which is = rsvd_rank + brand_r_target_excess; this the initial B-rank gues when self.adaptable_B_rank == True) higher than self.maximum_ever_admissible_B_rank. it is recommended that the converse holds if you think your initial guess for rank is good. If so, please increase --maximum_ever_admissible_B_rank to higher value than --rsvd_rank + --brand_r_target_excess \n\n')
         #### end: for adaptable B rank ####
         
         self._prepare_model()
@@ -224,16 +228,26 @@ class B_KFACOptimizer(optim.Optimizer):
                 aa = self.CovAHandler(input[0].data, module)
                 self.nkfu_dict_a[module] = 1
                 
+                # ========= use max_admissible_B_rank to check if it's a "large linear layer" if we have adaptive rank! =
+                # this ensures we never get the (hidden) skinny-fat matrices in B-update to become short-fat, even with adaptive rank (adaptive rank capper by self.maximum_ever_admissible_B_rank)
+                if self.adaptable_B_rank == True:
+                    rank_to_check_if_LL = self.maximum_ever_admissible_B_rank
+                else:
+                    rank_to_check_if_LL = self.brand_r_target
+                # ==============
+                
                 #### see whether the module is LL or not, and save the size to the corresponding dicitonary  ###########
                 # we save sizes for ALL modules, not just for the ones allocated to *this GPU
                 # note that by saving the size in the correct dictionary we also implicitly sve info about whether one layer is LL or is CaSL
-                if isinstance(module, nn.Linear) and (self.brand_r_target + input[0].data.shape[0] < aa.shape[0]):
+                if isinstance(module, nn.Linear) and (rank_to_check_if_LL + input[0].data.shape[0] < aa.shape[0]):
                     self.size_0_of_LL_Kfactors_A[module] = aa.shape[0] 
                 else:
                     self.size_0_of_CaSL_Kfactors_A[module] = aa.shape[0] 
                 ##### end: save module size to the correct dictioanry depending on whether "is LL" or not ##############
                     
                 if module in self.size_0_of_LL_Kfactors_A: # the keys of this dict are all the LL layers
+                    if self.adaptable_B_rank == True:
+                        self.aa_for_reinit[module] = aa
                     if module in self.initalloc_modules_for_this_rank_A[self.rank]: # for LL layers alloc to *this GPU, perform B update
                         # initialize for brand-update first
                         self.d_a[module] = 0 * aa[0, :self.brand_r_target] # initialize with a rank-brand_target_rank null tensor for minila computational effort!
@@ -278,9 +292,17 @@ class B_KFACOptimizer(optim.Optimizer):
                     if module.bias is not None:
                         #print('\n Updating AA^T: we have bias in linear layer!')
                         A = torch.cat([A, A.new(A.size(0), 1).fill_(1)], 1).T
-    
+                    
+                    #### A: select correct target (adaptive) B- rank ################
+                    if self.adaptable_B_rank == False or self.steps <= (self.TCov * self.B_rank_adaptation_T_brand_updt_multiplier):
+                        actual_B_target_rank = self.brand_r_target
+                    else:
+                        #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
+                        actual_B_target_rank = self.current_B_ranks_a[module]
+                    #### END: A: select correct target (adaptive) B- rank ################
+                    
                     self.d_a[module], self.Q_a[module] = self.Brand_S_update(self.Q_a[module], self.stat_decay * self.d_a[module],
-                                                                        A = self.sqr_1_minus_stat_decay * A, r_target = self.brand_r_target, 
+                                                                        A = self.sqr_1_minus_stat_decay * A, r_target = actual_B_target_rank, 
                                                                         device = torch.device('cuda:{}'.format(self.rank)))
                     self.nkfu_dict_a[module] += 1
                     ########### END BRAND UPDATE #########################
@@ -304,7 +326,11 @@ class B_KFACOptimizer(optim.Optimizer):
                     if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
                         # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
-                        self.d_a[module] = 0 * self.d_a[module]; self.Q_a[module] = 0 * self.Q_a[module]
+                        if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
+                            actual_rank = self.current_B_ranks_a[module]
+                            self.Q_a[module] = 0 * self.aa_for_reinit[module][:,:actual_rank]; self.d_a[module] = 0 * self.Q_a[module][0,:]
+                        else:
+                            self.d_a[module] = 0 * self.d_a[module]; self.Q_a[module] = 0 * self.Q_a[module]
                         self.nkfu_dict_a[module] += 1
                 elif module in self.size_0_of_CaSL_Kfactors_A: #elif module not in self.size_0_of_LL_Kfactors_A:
                     self.nkfu_dict_a[module] += 1 # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
@@ -322,16 +348,28 @@ class B_KFACOptimizer(optim.Optimizer):
                 # both these approaches in 2 require us to know which layer is LL and whic isn;t, and the latter requires the size of the layer, which we get at self.steps ==0, and that's why we treat it sepparately
                 gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
                 self.nkfu_dict_g[module] = 1
+                
+                # ========= use max_admissible_B_rank to check if it's a "large linear layer" if we have adaptive rank! =
+                # this ensures we never get the (hidden) skinny-fat matrices in B-update to become short-fat, even with adaptive rank (adaptive rank capper by self.maximum_ever_admissible_B_rank)
+                if self.adaptable_B_rank == True:
+                    rank_to_check_if_LL = self.maximum_ever_admissible_B_rank
+                else:
+                    rank_to_check_if_LL = self.brand_r_target
+                # ==============
+                    
                 #### see whether the module is LL or not, and save the size to the corresponding dicitonary  ###########
                 # we save sizes for ALL modules, not just for the ones allocated to *this GPU
                 # note that by saving the size in the correct dictionary we also implicitly sve info about whether one layer is LL or is CaSL
-                if isinstance(module, nn.Linear) and (self.brand_r_target + grad_output[0].data.shape[0] < gg.shape[0]):
+                if isinstance(module, nn.Linear) and (rank_to_check_if_LL + grad_output[0].data.shape[0] < gg.shape[0]):
                     self.size_0_of_LL_Kfactors_G[module] = gg.shape[0] 
                 else:
                     self.size_0_of_CaSL_Kfactors_G[module] = gg.shape[0] 
                 ##### end: save module size to the correct dictioanry depending on whether "is LL" or not ##############
                     
                 if module in self.size_0_of_LL_Kfactors_G: 
+                    if self.adaptable_B_rank == True:
+                        self.gg_for_reinit[module] = gg
+                        
                     if module in self.initalloc_modules_for_this_rank_G[self.rank]: # for LL layers alloc to *this GPU, perform B update
                         # initialize for brand-update first
                         self.d_g[module] = 0 * gg[0, :self.brand_r_target] # initialize with a rank-brand_target_rank null tensor for minila computational effort!
@@ -376,9 +414,17 @@ class B_KFACOptimizer(optim.Optimizer):
                         G = grad_output[0].data.T * (batch_size + 0.0)**0.5
                     else:
                         G = grad_output[0].data.T / (batch_size + 0.0)**0.5
-                
+                    
+                    #### G: select correct target (adaptive) B- rank ################
+                    if self.adaptable_B_rank == False or self.steps <= (self.TCov * self.B_rank_adaptation_T_brand_updt_multiplier):
+                        actual_B_target_rank = self.brand_r_target
+                    else:
+                        #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
+                        actual_B_target_rank = self.current_B_ranks_g[module]
+                    #### END: G: select correct target (adaptive) B- rank ################
+                        
                     self.d_g[module], self.Q_g[module] = self.Brand_S_update(self.Q_g[module], self.stat_decay * self.d_g[module],
-                                                                        A = self.sqr_1_minus_stat_decay * G, r_target = self.brand_r_target,
+                                                                        A = self.sqr_1_minus_stat_decay * G, r_target = actual_B_target_rank,
                                                                         device = torch.device('cuda:{}'.format(self.rank)))
                     self.nkfu_dict_g[module] += 1
                     ########### END BRAND UPDATE #########################
@@ -402,7 +448,11 @@ class B_KFACOptimizer(optim.Optimizer):
                     if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0: 
                         # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
-                        self.d_g[module] = 0 * self.d_g[module]; self.Q_g[module] = 0 * self.Q_g[module]
+                        if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
+                            actual_rank = self.current_B_ranks_a[module]
+                            self.Q_g[module] = 0 * self.gg_for_reinit[module][:,:actual_rank]; self.d_g[module] = 0 * self.Q_g[module][0,:]
+                        else:
+                            self.d_g[module] = 0 * self.d_g[module]; self.Q_g[module] = 0 * self.Q_g[module]
                         self.nkfu_dict_g[module] += 1
                 elif module in self.size_0_of_CaSL_Kfactors_G: #elif module not in self.size_0_of_LL_Kfactors_A:
                     self.nkfu_dict_g[module] += 1 # do nothing if the KFACTOR is not LL, as this gets reset in update_inv metod at the correct time
@@ -484,7 +534,7 @@ class B_KFACOptimizer(optim.Optimizer):
         elif (m in self.size_0_of_CaSL_Kfactors_A) and (self.steps - self.TInv) % (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier) == 0 and (self.steps - self.TInv) > 0 and self.adaptable_rsvd_rank == True:
             # reinitialize the lazy tensors to have a shape corresponding to the newly chosen rank
             actual_rank = min(self.Q_a[m].shape[0], self.current_rsvd_ranks_a[m])
-            self.d_a[m] = 0 * self.aa_for_reinit[m][0,:actual_rank]; self.Q_a[m] = 0 * self.aa_for_reinit[m][:,:actual_rank]
+            self.Q_a[m] = 0 * self.aa_for_reinit[m][:,:actual_rank]; self.d_a[m] = 0 * self.Q_a[m][0,:]
         elif m in self.size_0_of_CaSL_Kfactors_A: # the keys of this dictionary are all the CASL modules
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
             #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
@@ -763,6 +813,8 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                          max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],
                                                                          target_rel_err = self.rsvd_target_truncation_rel_err,
                                                                          TInv_multiplier = self.rsvd_rank_adaptation_TInv_multiplier)
+                # UNCOMMENT LINE BELOW FOR DEBUG OF rsvd adaptive rank mechanism
+                #print('\n self.rank = {}, self.steps = {}: \n self.all_prev_rsvd_trunc_errs_a = {}, self.all_prev_rsvd_used_ranks_a = {}, \n self.current_rsvd_ranks_a = {}; \n self.all_prev_rsvd_trunc_errs_g = {}; \n self.all_prev_rsvd_used_ranks_g = {}; \n self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_rsvd_trunc_errs_a, self.all_prev_rsvd_used_ranks_a, self.current_rsvd_ranks_a, self.all_prev_rsvd_trunc_errs_g, self.all_prev_rsvd_used_ranks_g, self.current_rsvd_ranks_g))
             ####### END : For dealing wth adaptive RSVD rank : append and recompute at right times #######################
             ##############################################################################################################
             
@@ -795,12 +847,12 @@ class B_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TInv * self.B_rank_adaptation_TInv_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov * self.B_rank_adaptation_T_brand_updt_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_B_ranks_a = {}'.format(self.rank, self.steps, self.current_B_ranks_a))
                         self.current_B_ranks_a[m] = get_new_B_rank(self.all_prev_B_trunc_errs_a[m], self.all_prev_B_used_ranks_a[m], 
-                                                                         max_rank = min(self.maximum_ever_admissible_B_rank, self.Q_a[m].shape[0]), #tensor_size = self.Q_a[m].shape[0],
+                                                                         max_rank = self.maximum_ever_admissible_B_rank, #tensor_size = self.Q_a[m].shape[0],
                                                                          target_rel_err = self.B_target_truncation_rel_err,
-                                                                         TInv_multiplier = self.B_rank_adaptation_TInv_multiplier)
+                                                                         TInv_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier)
                 if m in self.size_0_of_LL_Kfactors_G: 
                     # if we do adaptable rank thing, save the rank and error data/statistics
                     ####### G: append rank and errors #### since done after communication we have global info everywhere ##########
@@ -823,13 +875,13 @@ class B_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TInv * self.B_rank_adaptation_TInv_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov * self.B_rank_adaptation_T_brand_updt_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.current_B_ranks_g))
                         self.current_B_ranks_g[m] = get_new_B_rank(self.all_prev_B_trunc_errs_g[m], self.all_prev_B_used_ranks_g[m], 
-                                                                         max_rank = min(self.maximum_ever_admissible_B_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],
+                                                                         max_rank = self.maximum_ever_admissible_B_rank,#tensor_size = self.Q_g[m].shape[0],
                                                                          target_rel_err = self.B_target_truncation_rel_err,
-                                                                         TInv_multiplier = self.B_rank_adaptation_TInv_multiplier)
-                #debug print
+                                                                         TInv_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier)
+                # UNCOMMENT LINE BELOW FOR DEBUG OF rsvd adaptive rank mechanism
                 print('\n self.rank = {}, self.steps = {}: \n self.all_prev_B_trunc_errs_a = {}, self.all_prev_B_used_ranks_a = {}, \n self.current_B_ranks_a = {}; \n self.all_prev_B_trunc_errs_g = {}; \n self.all_prev_B_used_ranks_g = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_B_trunc_errs_a, self.all_prev_B_used_ranks_a, self.current_B_ranks_a, self.all_prev_B_trunc_errs_g, self.all_prev_B_used_ranks_g, self.current_B_ranks_g))
             ####### END : For dealing wth adaptive B- rank : append and recompute at right times #######################
             ##############################################################################################################            

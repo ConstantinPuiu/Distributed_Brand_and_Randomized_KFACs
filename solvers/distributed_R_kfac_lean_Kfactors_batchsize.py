@@ -690,6 +690,8 @@ class R_KFACOptimizer(optim.Optimizer):
                                                                          max_rank = min(self.maximum_ever_admissible_rsvd_rank, self.Q_g[m].shape[0]),#tensor_size = self.Q_g[m].shape[0],
                                                                          target_rel_err = self.rsvd_target_truncation_rel_err,
                                                                          TInv_multiplier = self.rsvd_rank_adaptation_TInv_multiplier)
+                    # UNCOMMENT LINE BELOW FOR DEBUG OF rsvd adaptive rank mechanism
+                    #print('\n self.rank = {}, self.steps = {}: \n self.all_prev_rsvd_trunc_errs_a = {}, self.all_prev_rsvd_used_ranks_a = {}, \n self.current_rsvd_ranks_a = {}; \n self.all_prev_rsvd_trunc_errs_g = {}; \n self.all_prev_rsvd_used_ranks_g = {}; \n self.current_rsvd_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_rsvd_trunc_errs_a, self.all_prev_rsvd_used_ranks_a, self.current_rsvd_ranks_a, self.all_prev_rsvd_trunc_errs_g, self.all_prev_rsvd_used_ranks_g, self.current_rsvd_ranks_g))
                 ####### END : For dealing wth adaptive RSVD rank : append and recompute at right times #######################
                         
                 if self.dist_comm_for_layers_debugger:
