@@ -114,7 +114,7 @@ def main(world_size, args):
     WD = args.WD #0.000007 #1 ########  7e-4 got 9.00 +% acc conistently. 7e-06 worked fine too!
     ### RSVD specific params or stuff that 1st appeared in rsvd(clip and damping type)
     rsvd_rank = args.rsvd_rank
-    oversampling_parameter = args.oversampling_parameter
+    rsvd_oversampling_parameter = args.rsvd_oversampling_parameter
     rsvd_niter = args.rsvd_niter
     damping_type = args.damping_type #'adaptive',
     clip_type = args.clip_type
@@ -197,7 +197,7 @@ def main(world_size, args):
                                 weight_decay = WD, TCov = KFAC_matrix_update_frequency,
                                 TInv = KFAC_matrix_invert_frequency,
                                 rsvd_rank = rsvd_rank,
-                                oversampling_parameter = oversampling_parameter,
+                                rsvd_oversampling_parameter = rsvd_oversampling_parameter,
                                 rsvd_niter = rsvd_niter,
                                 work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost,
                                 work_eff_alloc_with_time_measurement = work_eff_alloc_with_time_measurement,
@@ -268,7 +268,7 @@ def parse_args():
     
     ### RSVD specific params or stuff that 1st appeared in rsvd(clip and damping type)
     parser.add_argument('--rsvd_rank', type=int, default = 220, help = 'The target rank of RSVD' )
-    parser.add_argument('--oversampling_parameter', type=int, default = 10, help = 'the oversampling parameter of RSVD' )
+    parser.add_argument('--rsvd_oversampling_parameter', type=int, default = 10, help = 'the oversampling parameter of RSVD' )
     parser.add_argument('--rsvd_niter', type=int, default = 3, help = '# of power(like) iterations in getting projection subspace for RSVD' )
     parser.add_argument('--damping_type', type=str, default= 'adaptive', help = 'type of damping' )
     parser.add_argument('--clip_type', type=str, default = 'non_standard', help = 'Weight decay' )
