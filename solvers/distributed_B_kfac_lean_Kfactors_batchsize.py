@@ -36,7 +36,7 @@ class B_KFACOptimizer(optim.Optimizer):
                  TInv=100,
                  batch_averaged=True,
                  rsvd_rank = 220,
-                 oversampling_parameter = 10,
+                 rsvd_oversampling_parameter = 10,
                  rsvd_niter = 3,
                  damping_type = 'adaptive',
                  clip_type = 'non_standard',
@@ -111,7 +111,8 @@ class B_KFACOptimizer(optim.Optimizer):
         ### R-KFAC specific or introduced with RKFAC for te 1st time
         #rsvd_params
         self.rsvd_rank = rsvd_rank
-        self.total_rsvd_rank = oversampling_parameter + rsvd_rank
+        self.rsvd_oversampling_parameter = rsvd_oversampling_parameter
+        self.total_rsvd_rank = rsvd_oversampling_parameter + rsvd_rank
         self.rsvd_niter = rsvd_niter
         # introduced with RKFAC for te 1st time but also relevant to simple KFAC
         self.damping_type = damping_type
@@ -439,8 +440,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
             else:
                 #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
-                ics = self.current_rsvd_ranks_a[m]
-                oversampled_rank = min(self.m_aa[m].shape[0], ics + self.oversampling_parameter)
+                oversampled_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] + self.rsvd_oversampling_parameter)
                 actual_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] )
             #### END: A: select correct target (adaptive) RSVD rank ################
             
@@ -475,7 +475,7 @@ class B_KFACOptimizer(optim.Optimizer):
                 oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
                 actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
             else: 
-                oversampled_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m] + self.oversampling_parameter)
+                oversampled_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m] + self.rsvd_oversampling_parameter)
                 actual_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m])
             #### end G : select correct target (adaptive) RSVD rank ################
             

@@ -30,7 +30,7 @@ class R_KFACOptimizer(optim.Optimizer):
                  TInv=100,
                  batch_averaged=True,
                  rsvd_rank = 220,
-                 oversampling_parameter = 10,
+                 rsvd_oversampling_parameter = 10,
                  rsvd_niter = 3,
                  work_alloc_propto_RSVD_cost = True,
                  work_eff_alloc_with_time_measurement = True,
@@ -104,8 +104,8 @@ class R_KFACOptimizer(optim.Optimizer):
         ### R-KFAC specific or introduced with RKFAC for te 1st time
         #rsvd_params
         self.rsvd_rank = rsvd_rank
-        self.oversampling_parameter = oversampling_parameter
-        self.total_rsvd_rank = oversampling_parameter + rsvd_rank
+        self.rsvd_oversampling_parameter = rsvd_oversampling_parameter
+        self.total_rsvd_rank = rsvd_oversampling_parameter + rsvd_rank
         self.rsvd_niter = rsvd_niter
         #### specific to Work allocation in proportion to RSVD cost
         self.work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost
@@ -368,8 +368,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 actual_rank = min(self.m_aa[m].shape[0], self.rsvd_rank)
             else:
                 #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
-                ics = self.current_rsvd_ranks_a[m]
-                oversampled_rank = min(self.m_aa[m].shape[0], ics + self.oversampling_parameter)
+                oversampled_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] + self.rsvd_oversampling_parameter)
                 actual_rank = min(self.m_aa[m].shape[0], self.current_rsvd_ranks_a[m] )
             #### END: A: select correct target RSVD rank ################
                 
@@ -419,7 +418,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 oversampled_rank = min(self.m_gg[m].shape[0], self.total_rsvd_rank)
                 actual_rank = min(self.m_gg[m].shape[0], self.rsvd_rank)
             else: 
-                oversampled_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m] + self.oversampling_parameter)
+                oversampled_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m] + self.rsvd_oversampling_parameter)
                 actual_rank = min(self.m_gg[m].shape[0], self.current_rsvd_ranks_g[m])
             #### end G : select correct target RSVD rank ################
                 
@@ -714,7 +713,7 @@ class R_KFACOptimizer(optim.Optimizer):
                                                                                 size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
                                                                                 size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
                                                                                 target_rank_RSVD = self.rsvd_rank,
-                                                                                oversampling_to_rank = self.oversampling_parameter)
+                                                                                oversampling_to_rank = self.rsvd_oversampling_parameter)
                 #new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r_tensor(number_of_workers = self.world_size, 
                 #                                                                size_0_of_all_Kfactors_A_tensor = self.size_0_of_all_Kfactors_A_tensor,
                 #                                                                size_0_of_all_Kfactors_G_tensor = self.size_0_of_all_Kfactors_G_tensor,
