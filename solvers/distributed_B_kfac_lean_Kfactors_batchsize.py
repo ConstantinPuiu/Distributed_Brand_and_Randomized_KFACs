@@ -327,9 +327,9 @@ class B_KFACOptimizer(optim.Optimizer):
                         # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                         if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
-                            actual_rank = self.current_B_ranks_a[module]
-                            self.Q_a[module] = 0 * self.aa_for_reinit[module][:,:actual_rank]; self.Q_a[module] = self.Q_a[module].contiguous()
-                            self.d_a[module] = 0 * self.Q_a[module][0,:]; self.d_a[module] = self.d_a[module].contiguous()
+                            actual_rank = self.current_B_ranks_a[module] + (not self.B_truncate_before_inversion) * self.batch_size
+                            self.Q_a[module] = 0 * self.aa_for_reinit[module][:,:actual_rank]#; self.Q_a[module] = self.Q_a[module].contiguous()
+                            self.d_a[module] = 0 * self.Q_a[module][0,:]#; self.d_a[module] = self.d_a[module].contiguous()
                         else:
                             self.d_a[module] = 0 * self.d_a[module]; self.Q_a[module] = 0 * self.Q_a[module]
                         self.nkfu_dict_a[module] += 1
@@ -403,7 +403,7 @@ class B_KFACOptimizer(optim.Optimizer):
                         self.m_gg[module] = (1 - self.stat_decay) * gg + 0
                     else:
                         actual_rank = min(gg.shape[0], self.rsvd_rank)
-                        self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_a's as skinnytall because
+                        self.d_g[module] = 0 * gg[0,:actual_rank]; self.Q_g[module] = 0 * gg[:,:actual_rank] # Now we'll have Q_g's as skinnytall because
                         # we are using RSVD representation(lowrank) and thus we need to initialize our zeros accordngly
                
             elif module in self.LL_modules_for_this_rank_G[self.rank]:
@@ -450,9 +450,9 @@ class B_KFACOptimizer(optim.Optimizer):
                         # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                         if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
-                            actual_rank = self.current_B_ranks_g[module]
-                            self.Q_g[module] = 0 * self.gg_for_reinit[module][:,:actual_rank]; self.Q_g[module] = self.Q_g[module].contiguous()
-                            self.d_g[module] = 0 * self.Q_g[module][0,:]; self.d_g[module] = self.d_g[module].contiguous()
+                            actual_rank = self.current_B_ranks_g[module] + (not self.B_truncate_before_inversion) * self.batch_size
+                            self.Q_g[module] = 0 * self.gg_for_reinit[module][:,:actual_rank]#; self.Q_g[module] = self.Q_g[module].contiguous()
+                            self.d_g[module] = 0 * self.Q_g[module][0,:]#; self.d_g[module] = self.d_g[module].contiguous()
                         else:
                             self.d_g[module] = 0 * self.d_g[module]; self.Q_g[module] = 0 * self.Q_g[module]
                         self.nkfu_dict_g[module] += 1
@@ -729,6 +729,9 @@ class B_KFACOptimizer(optim.Optimizer):
                 #print('RANK {}. Doing line: dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 #if m in self.size_0_of_LL_Kfactors_A: 
                 #print('\n\nrank = {}, step# = {}, module = {} :: self.d_a[m].shape = {};\nself.d_a[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_a[m].shape, self.d_a[m]))
+                #print('\n\nrank = {}, step# = {}, module = {} :: self.Q_a[m].shape = {};\nself.Q_a[m] = {}\n\n'.format(self.rank, self.steps, m, self.Q_a[m].shape, self.Q_a[m]))
+                #print('\n\nrank = {}, step# = {}, module = {} :: self.d_g[m].shape = {};\nself.d_g[m] = {}\n\n'.format(self.rank, self.steps, m, self.d_g[m].shape, self.d_g[m]))
+                #print('\n\nrank = {}, step# = {}, module = {} :: self.Q_g[m].shape = {};\nself.Q_g[m] = {}\n\n'.format(self.rank, self.steps, m, self.Q_g[m].shape, self.Q_g[m]))
                 handle = dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_a[m] = 0 * self.d_a[m] + 1
@@ -889,7 +892,7 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                          target_rel_err = self.B_target_truncation_rel_err,
                                                                          TInv_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier)
                 # UNCOMMENT LINE BELOW FOR DEBUG OF B-update adaptive rank mechanism
-                print('\n self.rank = {}, self.steps = {}: \n self.all_prev_B_trunc_errs_a = {}, self.all_prev_B_used_ranks_a = {}, \n self.current_B_ranks_a = {}; \n self.all_prev_B_trunc_errs_g = {}; \n self.all_prev_B_used_ranks_g = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_B_trunc_errs_a, self.all_prev_B_used_ranks_a, self.current_B_ranks_a, self.all_prev_B_trunc_errs_g, self.all_prev_B_used_ranks_g, self.current_B_ranks_g))
+                #print('\n self.rank = {}, self.steps = {}: \n self.all_prev_B_trunc_errs_a = {}, self.all_prev_B_used_ranks_a = {}, \n self.current_B_ranks_a = {}; \n self.all_prev_B_trunc_errs_g = {}; \n self.all_prev_B_used_ranks_g = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_B_trunc_errs_a, self.all_prev_B_used_ranks_a, self.current_B_ranks_a, self.all_prev_B_trunc_errs_g, self.all_prev_B_used_ranks_g, self.current_B_ranks_g))
             ####### END : For dealing wth adaptive B- rank : append and recompute at right times #######################
             ##############################################################################################################            
                         
