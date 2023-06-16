@@ -56,13 +56,13 @@ def get_new_B_rank(list_err, list_ranks, max_rank = 500, target_rel_err = 0.033,
         ## error margins - can take them as arguments later, but it's ok like this for now,a nd maybe forever###
         err_margin_to_incr = 0.015
         err_margin_to_decrease = 0.02
-        rank_step = 10
+        rank_step_decrease = 5; rank_step_increase = 10
         ## error margins - can take them as arguments later, but it's ok like this for now,a nd maybe forever###
         if target_rel_err - err_margin_to_decrease > avg_rel_err: # then we're too accurate, DECREASE target rank
-            new_B_rank = max(prev_used_rank - rank_step / 2, 70) # the 70 here ensures the rank does not go below 70
+            new_B_rank = max(prev_used_rank - rank_step_decrease, 70) # the 70 here ensures the rank does not go below 70
             new_B_rank = min(new_B_rank, max_rank)
         elif target_rel_err +  err_margin_to_incr < avg_rel_err: # then we're not accurate enough, INCREASE target rank
-            new_B_rank = min(prev_used_rank + rank_step, max_rank)
+            new_B_rank = min(prev_used_rank + rank_step_increase, max_rank)
         else:
             new_B_rank = prev_used_rank
     else:
