@@ -888,8 +888,8 @@ class B_KFACOptimizer(optim.Optimizer):
                                                                          max_rank = self.maximum_ever_admissible_B_rank,#tensor_size = self.Q_g[m].shape[0],
                                                                          target_rel_err = self.B_target_truncation_rel_err,
                                                                          TInv_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier)
-                # UNCOMMENT LINE BELOW FOR DEBUG OF rsvd adaptive rank mechanism
-                #print('\n self.rank = {}, self.steps = {}: \n self.all_prev_B_trunc_errs_a = {}, self.all_prev_B_used_ranks_a = {}, \n self.current_B_ranks_a = {}; \n self.all_prev_B_trunc_errs_g = {}; \n self.all_prev_B_used_ranks_g = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_B_trunc_errs_a, self.all_prev_B_used_ranks_a, self.current_B_ranks_a, self.all_prev_B_trunc_errs_g, self.all_prev_B_used_ranks_g, self.current_B_ranks_g))
+                # UNCOMMENT LINE BELOW FOR DEBUG OF B-update adaptive rank mechanism
+                print('\n self.rank = {}, self.steps = {}: \n self.all_prev_B_trunc_errs_a = {}, self.all_prev_B_used_ranks_a = {}, \n self.current_B_ranks_a = {}; \n self.all_prev_B_trunc_errs_g = {}; \n self.all_prev_B_used_ranks_g = {}; \n self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.all_prev_B_trunc_errs_a, self.all_prev_B_used_ranks_a, self.current_B_ranks_a, self.all_prev_B_trunc_errs_g, self.all_prev_B_used_ranks_g, self.current_B_ranks_g))
             ####### END : For dealing wth adaptive B- rank : append and recompute at right times #######################
             ##############################################################################################################            
                         
