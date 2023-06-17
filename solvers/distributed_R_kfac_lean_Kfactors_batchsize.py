@@ -549,17 +549,21 @@ class R_KFACOptimizer(optim.Optimizer):
         return v
 
     def _kl_clip_and_update_grad(self, updates, lr):
+        if self.lightweight_module_surrogates:
+            for_this_scope_heavy_modules = self.heavyweight_module_to_lightweight_module.keys()
+        else:
+            for_this_scope_heavy_modules = self.modules
         if self.clip_type == 'standard':
                 # do kl clip
             vg_sum = 0
-            for m in self.modules:
+            for m in for_this_scope_heavy_modules:
                 v = updates[m]
                 vg_sum += torch.abs( (v[0] * m.weight.grad.data * lr ** 2).sum()) #.item()
                 if m.bias is not None:
                     vg_sum += torch.abs( (v[1] * m.bias.grad.data * lr ** 2).sum() ) #.item()
             nu = min(1.0, math.sqrt(self.kl_clip / vg_sum))
     
-            for m in self.modules:
+            for m in for_this_scope_heavy_modules:
                 v = updates[m]
                 m.weight.grad.data.copy_(v[0])
                 m.weight.grad.data.mul_(nu)
@@ -567,7 +571,7 @@ class R_KFACOptimizer(optim.Optimizer):
                     m.bias.grad.data.copy_(v[1])
                     m.bias.grad.data.mul_(nu)
         else:
-            for m in self.modules:
+            for m in for_this_scope_heavy_modules:
                 v = updates[m]
                 # ipdb.set_trace(context = 7)
                 if m.bias is not None:
