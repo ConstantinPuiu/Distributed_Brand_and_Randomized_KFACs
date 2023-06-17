@@ -15,6 +15,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time, allocate_work_timebased_tensors, allocate_RSVD_inversion_work_same_fixed_r_tensor)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.lightweight_module import lightweight_module
 
 class R_KFACOptimizer(optim.Optimizer):
     def __init__(self,
@@ -41,7 +42,9 @@ class R_KFACOptimizer(optim.Optimizer):
                  rsvd_target_truncation_rel_err = 0.033,
                  maximum_ever_admissible_rsvd_rank = 700,
                  rsvd_rank_adaptation_TInv_multiplier = 5,
-                 rsvd_adaptive_max_history = 30):
+                 rsvd_adaptive_max_history = 30,
+                 # for lightweight modules (key) surrogates switching on/off
+                 lightweight_module_surrogates = False):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -155,11 +158,32 @@ class R_KFACOptimizer(optim.Optimizer):
             self.aa_for_reinit = {}; self.gg_for_reinit = {} 
         # for the 2 dictionaries above: deallocated modules will be deleted; newly allocated modules will be added and have FEWER elements
         
+        #### for turning heavy-weight module (keys) into lightweight surrogates: #######
+        self.lightweight_module_surrogates = lightweight_module_surrogates
+        if self.lightweight_module_surrogates:
+            self.heavyweight_module_to_lightweight_module = {} # dictionary that converts the heavyweight module key into a lightweight surrogate. will be conceived when registering hooks
+            self.last_linear_allocated = 0
+            self.last_conv_allocated = 0
+            def get_surrogate_for_heavyweight_module(module):
+                if module.__class__.__name__ == 'Linear': 
+                    self.last_linear_allocated += 1
+                    return lightweight_module(module, self.last_linear_allocated)
+                elif module.__class__.__name__ == 'Conv2d':
+                    self.last_conv_allocated += 1
+                    return lightweight_module(module, self.last_conv_allocated)
+            self.get_surrogate_for_heavyweight_module = get_surrogate_for_heavyweight_module
+        ## END: for turning heavy-weight module (keys) into lightweight surrogates: ####    
+        
         # prepare model, and also allocate work across GPUs
         self._prepare_model()
         
     def _save_input(self, module, input):
         if torch.is_grad_enabled() and self.steps % self.TCov == 0:
+            ###### covert heavyweight key into lightweight surrogate ###################
+            if self.lightweight_module_surrogates:
+                module = self.heavyweight_module_to_lightweight_module[module]
+            ###### END: covert heavyweight key into lightweight surrogate ##############
+            
             ##### for size-based efficient allocation with tensor
             if self.steps == 0:
                 if self.work_alloc_propto_RSVD_cost == True and self.work_eff_alloc_with_time_measurement == False: # and self.size_0_of_all_Kfactors_A_tensor == None:
@@ -246,6 +270,11 @@ class R_KFACOptimizer(optim.Optimizer):
     def _save_grad_output(self, module, grad_input, grad_output):
         # Accumulate statistics for Fisher matrices
         if self.acc_stats and self.steps % self.TCov == 0:
+            ###### covert heavyweight key into lightweight surrogate ###################
+            if self.lightweight_module_surrogates:
+                module = self.heavyweight_module_to_lightweight_module[module]
+            ###### END: covert heavyweight key into lightweight surrogate ##############
+                
             #grad_output_data = grad_output[0].data + 0
             if module in self.modules_for_this_rank_G[self.rank]: # ONLY compute the Kfactor and update it if the GPU parsing this
                 #is responsible for this aprticular module
@@ -306,7 +335,15 @@ class R_KFACOptimizer(optim.Optimizer):
             classname = module.__class__.__name__
             # print('=> We keep following layers in KFAC. <=')
             if classname in self.known_modules:
-                self.modules.append(module)
+                ### append module to self.modules, if we want lightweight surrogates instead, have it so, and also save a heavy ---> lightweight dictioanry
+                ## for later use ##############################################
+                if self.lightweight_module_surrogates:
+                    lightweight_surrogate = self.get_surrogate_for_heavyweight_module(module)
+                    self.heavyweight_module_to_lightweight_module[module] = lightweight_surrogate
+                    self.modules.append(lightweight_surrogate)
+                else:
+                    self.modules.append(module)
+                ###############################################################
                 module.register_forward_pre_hook(self._save_input)
                 module.register_full_backward_hook(self._save_grad_output) # deprecated: # module.register_backward_hook(self._save_grad_output)
                 print('(%s): %s' % (count, module))

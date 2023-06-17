@@ -147,6 +147,13 @@ def main(world_size, args):
     rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
     # ====================================================
     
+    ### for lightweight modules (key) surrogates switching on/off ########
+    if args.lightweight_module_surrogates == 0:
+        lightweight_module_surrogates = False
+    else:
+        lightweight_module_surrogates = True
+    ### END: for lightweight modules (key) surrogates switching on/off ###
+    
     #### for selcting net type ##############
     net_type = args.net_type
     #########################################
@@ -203,11 +210,14 @@ def main(world_size, args):
                                 work_eff_alloc_with_time_measurement = work_eff_alloc_with_time_measurement,
                                 damping_type = damping_type, #'adaptive',
                                 clip_type = clip_type,
+                                # for adaptive rsvd rank
                                 adaptable_rsvd_rank = adaptable_rsvd_rank,
                                 rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
                                 maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
                                 rsvd_adaptive_max_history = rsvd_adaptive_max_history,
-                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier)#    optim.SGD(model.parameters(),
+                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
+                                # for lightweight modules (key) surrogates switching on/off
+                                lightweight_module_surrogates = lightweight_module_surrogates)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -294,6 +304,9 @@ def parse_args():
     
     ### for selecting net type
     parser.add_argument('--net_type', type=str, default = 'Conv', help = 'type of net: Conv (gives VGG16_bn less maxpool) or FC (gives an adhoc FC net)' )
+    
+    #### for turning heavy-weight module (keys) into lightweight surrogates: #######
+    parser.add_argument('--lightweight_module_surrogates', type=int, default = 0, help='Uses lightweight surrogates instead of (heavy) tensor module keys for all dictionaries to save SOME memory .Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
     
     args = parser.parse_args()
     return args
