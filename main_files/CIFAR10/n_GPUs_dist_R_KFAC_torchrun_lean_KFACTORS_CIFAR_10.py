@@ -318,7 +318,8 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for R-KFAC lean\n'.format(now_start))
-    print('Important args were:\n  --work_alloc_propto_RSVD_cost = {};\n  --work_eff_alloc_with_time_measurement = {};\n  --adaptable_rsvd_rank = {};\n  --rsvd_rank_adaptation_TInv_multiplier = {}\n'.format(args.work_alloc_propto_RSVD_cost, args.work_eff_alloc_with_time_measurement, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier))
+    print('Important args were:\n  --work_alloc_propto_RSVD_cost = {};\n  --work_eff_alloc_with_time_measurement = {};\n  --adaptable_rsvd_rank = {};\n  --rsvd_rank_adaptation_TInv_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_cost, args.work_eff_alloc_with_time_measurement, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier))
+    print('--lightweight_module_surrogates; \n'. format(args.lightweight_module_surrogates))
     
     print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
