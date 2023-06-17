@@ -509,11 +509,14 @@ class R_KFACOptimizer(optim.Optimizer):
             p_grad_mat = torch.cat([p_grad_mat, m.bias.grad.data.view(-1, 1)], 1)
         return p_grad_mat
 
-    def _get_natural_grad(self, m, p_grad_mat, damping):
+    def _get_natural_grad(self, m, p_grad_mat, damping, m_light_weight):
         """
         :param m:  the layer
         :param p_grad_mat: the gradients in matrix form
+        :param m_light_weight is the light-weigt surrogate of m. If we have self.lightweight_module_surrogates == True, 
+                                    this will be the surrogate within the scope of this method, otherwise, it's just m!'
         :return: a list of gradients w.r.t to the parameters in `m`
+        
         """
         # p_grad_mat is of output_dim * input_dim
         ###### OLD IMPLEMENTATION OF GET nkfu's - not perfectly correct when we (re)allocate work. Commented out:
@@ -522,12 +525,12 @@ class R_KFACOptimizer(optim.Optimizer):
         # and when it does, th inverse (and thus the inverse application "sees" all the more updates done at frequency TCov - think about it!
         
         ###### get nkfu #################
-        nkfu_a = self.nkfu_dict_a[m]
-        nkfu_g = self.nkfu_dict_g[m]
+        nkfu_a = self.nkfu_dict_a[m_light_weight]
+        nkfu_g = self.nkfu_dict_g[m_light_weight]
         ###### END: get nkfu ############
-        v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m], D = self.d_g[m], M = p_grad_mat, lambdda = damping, 
+        v1 = X_reg_inverse_M_adaptive_damping(U = self.Q_g[m_light_weight], D = self.d_g[m_light_weight], M = p_grad_mat, lambdda = damping, 
                                                n_kfactor_update = nkfu_g, rho = self.stat_decay, damping_type = self.damping_type)
-        v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m], D = self.d_a[m], M = v1, lambdda = damping, 
+        v = M_X_reg_inverse_adaptive_damping(U = self.Q_a[m_light_weight], D = self.d_a[m_light_weight], M = v1, lambdda = damping, 
                                               n_kfactor_update = nkfu_a, rho = self.stat_decay, damping_type = self.damping_type)  # the damping here is adaptive!
         
         '''v1 = self.Q_g[m].t() @ p_grad_mat @ self.Q_a[m]
@@ -736,17 +739,18 @@ class R_KFACOptimizer(optim.Optimizer):
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {} WORLDSIZE {} MODULE {}. AFTER Allreduce d_a={}, Q_a = {}, d_g={}, Q_g = {} \n'.format(self.rank, self.world_size, m, self.d_a[m], self.Q_a[m], self.d_g[m], self.Q_g[m]))
             
+            ############# treating getmatrix and getnatural grad differently based on whether we are on the "lightweight track or not ######
             ### switch m back to heavyweight module if we are on lightweight track ##########################
             if self.lightweight_module_surrogates:
-                m = self.lightweight_module_to_heavyweight_module[m]
-            ### we need this switch because in the next 3 lines ( and implicitly in the 
-            ### self._kl_clip_and_update_grad(updates, lr) too, through updates[m] 
-            ### we are accessing tensors and their properties
-            ### END: switch m back to heavyweight module if we are on lightweight track #####################
-                
-            p_grad_mat = self._get_matrix_form_grad(m, classname)
-            v = self._get_natural_grad(m, p_grad_mat, damping)
-            updates[m] = v
+                m_heavy = self.lightweight_module_to_heavyweight_module[m] # m is the lightweight m within the scope of this if (not but else below scope)
+                p_grad_mat = self._get_matrix_form_grad(m_heavy, classname)
+                v = self._get_natural_grad(m_heavy, p_grad_mat, damping, m_light_weight = m)
+                updates[m] = v
+            else:
+                p_grad_mat = self._get_matrix_form_grad(m, classname)
+                v = self._get_natural_grad(m, p_grad_mat, damping, m_light_weight = m) # here both the heavy and the lightweight m are the heavy one
+                updates[m] = v
+            ####### END : treating getmatrix and getnatural grad differently based on whether we are on the "lightweight track or not ######
         self._kl_clip_and_update_grad(updates, lr)
         
         #### change work allocation to dimension-based for RSVD
