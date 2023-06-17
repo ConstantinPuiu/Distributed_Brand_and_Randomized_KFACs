@@ -553,6 +553,7 @@ class R_KFACOptimizer(optim.Optimizer):
             for_this_scope_heavy_modules = self.heavyweight_module_to_lightweight_module.keys()
         else:
             for_this_scope_heavy_modules = self.modules
+            
         if self.clip_type == 'standard':
                 # do kl clip
             vg_sum = 0
@@ -749,7 +750,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 m_heavy = self.lightweight_module_to_heavyweight_module[m] # m is the lightweight m within the scope of this if (not but else below scope)
                 p_grad_mat = self._get_matrix_form_grad(m_heavy, classname)
                 v = self._get_natural_grad(m_heavy, p_grad_mat, damping, m_light_weight = m)
-                updates[m] = v
+                updates[m_heavy] = v
             else:
                 p_grad_mat = self._get_matrix_form_grad(m, classname)
                 v = self._get_natural_grad(m, p_grad_mat, damping, m_light_weight = m) # here both the heavy and the lightweight m are the heavy one
