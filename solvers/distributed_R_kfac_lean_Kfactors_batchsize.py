@@ -162,6 +162,7 @@ class R_KFACOptimizer(optim.Optimizer):
         self.lightweight_module_surrogates = lightweight_module_surrogates
         if self.lightweight_module_surrogates:
             self.heavyweight_module_to_lightweight_module = {} # dictionary that converts the heavyweight module key into a lightweight surrogate. will be conceived when registering hooks
+            self.lightweight_module_to_heavyweight_module = {}
             self.last_linear_allocated = 0
             self.last_conv_allocated = 0
             def get_surrogate_for_heavyweight_module(module):
@@ -340,6 +341,7 @@ class R_KFACOptimizer(optim.Optimizer):
                 if self.lightweight_module_surrogates:
                     lightweight_surrogate = self.get_surrogate_for_heavyweight_module(module)
                     self.heavyweight_module_to_lightweight_module[module] = lightweight_surrogate
+                    self.lightweight_module_to_heavyweight_module[lightweight_surrogate] = module
                     self.modules.append(lightweight_surrogate)
                 else:
                     self.modules.append(module)
@@ -733,6 +735,15 @@ class R_KFACOptimizer(optim.Optimizer):
                         
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {} WORLDSIZE {} MODULE {}. AFTER Allreduce d_a={}, Q_a = {}, d_g={}, Q_g = {} \n'.format(self.rank, self.world_size, m, self.d_a[m], self.Q_a[m], self.d_g[m], self.Q_g[m]))
+            
+            ### switch m back to heavyweight module if we are on lightweight track ##########################
+            if self.lightweight_module_surrogates:
+                m = self.lightweight_module_to_heavyweight_module[m]
+            ### we need this switch because in the next 3 lines ( and implicitly in the 
+            ### self._kl_clip_and_update_grad(updates, lr) too, through updates[m] 
+            ### we are accessing tensors and their properties
+            ### END: switch m back to heavyweight module if we are on lightweight track #####################
+                
             p_grad_mat = self._get_matrix_form_grad(m, classname)
             v = self._get_natural_grad(m, p_grad_mat, damping)
             updates[m] = v
