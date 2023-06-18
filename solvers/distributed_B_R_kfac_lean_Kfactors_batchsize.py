@@ -565,15 +565,15 @@ class B_R_KFACOptimizer(optim.Optimizer):
         # ================ AA^T KFACTORS ===================================
         
         #########
-        def get_actual_and_oversampled_rank_aa(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank):
+        def get_actual_and_oversampled_rank_aa(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank, max_shape):
             if adaptable_rank == False or self.steps <= (T_ref * rank_adaptation_multiplier):
                 #elf.steps <= (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier) means we never initialized current_rsvd_ranks_awith ACTUAL values, so stik to basics
-                oversampled_rank = min(self.m_aa[m].shape[0], basic_rank + self.rsvd_oversampling_parameter)
-                actual_rank = min(self.m_aa[m].shape[0], basic_rank)
+                oversampled_rank = min(max_shape, basic_rank + self.rsvd_oversampling_parameter)
+                actual_rank = min(max_shape, basic_rank)
             else:
                 #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
-                oversampled_rank = min(self.m_aa[m].shape[0], current_ranks[m] + self.rsvd_oversampling_parameter)
-                actual_rank = min(self.m_aa[m].shape[0], current_ranks[m] )
+                oversampled_rank = min(max_shape, current_ranks[m] + self.rsvd_oversampling_parameter)
+                actual_rank = min(max_shape, current_ranks[m] )
             return oversampled_rank, actual_rank
         
         def do_rsvd_decomp_for_A(adaptable_rank, rank_adaptation_multiplier, T_ref, current_ranks, basic_rank):
@@ -586,7 +586,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
             # basic_rank can be either self.rsvd_rank or self.brand_r_target : it's the rank when no rank-adaptation is done
             
             #### A: select correct target (adaptive) RSVD rank ################
-            oversampled_rank, actual_rank = get_actual_and_oversampled_rank_aa(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank)
+            oversampled_rank, actual_rank = get_actual_and_oversampled_rank_aa(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank,
+                                                                               self.m_aa[m].shape[0])
             #### END: A: select correct target (adaptive) RSVD rank ################
             
             self.U_aa[m], self.D_aa[m], self.V_aa[m] = torch.svd_lowrank(self.m_aa[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
@@ -626,7 +627,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 ####### ###zero-out as appropriate ################
                 _, actual_rank = get_actual_and_oversampled_rank_aa(adaptable_rank = self.adaptable_B_rank, 
                                                         rank_adaptation_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier,
-                                                        T_ref = self.TCov, current_ranks = self.current_B_ranks_a, basic_rank = self.brand_r_target)
+                                                        T_ref = self.TCov, current_ranks = self.current_B_ranks_a, basic_rank = self.brand_r_target,
+                                                        max_shape = self.Q_a[m].shape[0])
                 if self.Q_a[m].shape[0] == actual_rank:
                     self.Q_a[m] = 0 * self.Q_a[m]
                 else:
@@ -642,15 +644,16 @@ class B_R_KFACOptimizer(optim.Optimizer):
         
         # ================ GG^T KFACTORS ===================================
         #########
-        def get_actual_and_oversampled_rank_gg(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank):
+        def get_actual_and_oversampled_rank_gg(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank, max_shape):
+            # max shape can be self.m_gg[m].shape[0] when doing an RSVD or self.Q_g[m].shape[0] when only reinitializing stuff
             if adaptable_rank == False or self.steps <= (T_ref * rank_adaptation_multiplier):
                 #elf.steps <= (self.TInv * self.rsvd_rank_adaptation_TInv_multiplier) means we never initialized current_rsvd_ranks_awith ACTUAL values, so stik to basics
-                oversampled_rank = min(self.m_gg[m].shape[0], basic_rank + self.rsvd_oversampling_parameter)
-                actual_rank = min(self.m_gg[m].shape[0], basic_rank)
+                oversampled_rank = min(max_shape, basic_rank + self.rsvd_oversampling_parameter)
+                actual_rank = min(max_shape, basic_rank)
             else:
                 #print('self.current_rsvd_ranks_a = {}'.format(self.current_rsvd_ranks_a)); print('self.current_rsvd_ranks_g = {}'.format(self.current_rsvd_ranks_g))
-                oversampled_rank = min(self.m_gg[m].shape[0], current_ranks[m] + self.rsvd_oversampling_parameter)
-                actual_rank = min(self.m_gg[m].shape[0], current_ranks[m] )
+                oversampled_rank = min(max_shape, current_ranks[m] + self.rsvd_oversampling_parameter)
+                actual_rank = min(max_shape, current_ranks[m] )
             return oversampled_rank, actual_rank
         
         def do_rsvd_decomp_for_G(adaptable_rank, rank_adaptation_multiplier, T_ref, current_ranks, basic_rank):
@@ -663,7 +666,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
             # basic_rank can be either self.rsvd_rank or self.brand_r_target : it's the rank when no rank-adaptation is done
             
             #### G: select correct target (adaptive) RSVD rank ################
-            oversampled_rank, actual_rank = get_actual_and_oversampled_rank_gg(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank)
+            oversampled_rank, actual_rank = get_actual_and_oversampled_rank_gg(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks,
+                                                                               basic_rank, self.m_gg[m].shape[0])
             #### END: G: select correct target (adaptive) RSVD rank ################
             
             self.U_gg[m], self.D_gg[m], self.V_gg[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
@@ -704,7 +708,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 #zero-out as appropriate
                 _, actual_rank = get_actual_and_oversampled_rank_gg(adaptable_rank = self.adaptable_B_rank, 
                                                     rank_adaptation_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier,
-                                                    T_ref = self.TCov, current_ranks = self.current_B_ranks_g, basic_rank = self.brand_r_target)
+                                                    T_ref = self.TCov, current_ranks = self.current_B_ranks_g, basic_rank = self.brand_r_target,
+                                                    max_shape = self.Q_g[m].shape[0])
                 if self.Q_g[m].shape[0] == actual_rank:
                     self.Q_g[m] = 0 * self.Q_g[m]
                 else:
