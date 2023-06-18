@@ -512,7 +512,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                         # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                     else:
-                        update_running_stat(gg, self.m_aa[module], self.stat_decay)
+                        update_running_stat(gg, self.m_gg[module], self.stat_decay)
                         # nkfu not updated as it will be updated in the previus if, elif, elif, else structure
                     #### END: update m_aa ############################################
             ##########################################################
@@ -616,7 +616,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
             self.d_a[m] = 0 * self.d_a[m];  self.Q_a[m] = 0 * self.Q_a[m]
             
         #### so far dealt with CaSL modules ########################
-        #### now dealing with R update of LL modules ###############
+        #### A: now dealing with R update of LL modules ###############
         if (m in self.size_0_of_LL_Kfactors_A) and ( self.steps % (self.TInv * self.B_R_period) == 0 ) and self.steps > self.TInv:
             if m in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank]:
                 #perform the rsvd update
@@ -637,7 +637,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 else:
                     self.d_a[m] = 0 * self.Q_a[m][0,:]
                 ##### END: zero-out as appropriate ################
-        #### END: now dealing with R update of LL modules ##########
+        #### END: A: now dealing with R update of LL modules ##########
         # ====  END  ======== AA^T KFACTORS ===================================
         
         # ================ GG^T KFACTORS ===================================
@@ -667,9 +667,9 @@ class B_R_KFACOptimizer(optim.Optimizer):
             #### END: G: select correct target (adaptive) RSVD rank ################
             
             self.U_gg[m], self.D_gg[m], self.V_gg[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
-            self.Q_g[m] = self.V_gg[m][:,:actual_rank] + 0.0 # 0.5*(self.U_aa[m][:,:actual_rank] + self.V_aa[m][:,:actual_rank]); 
+            self.Q_g[m] = self.V_gg[m][:,:actual_rank] + 0.0 # 0.5*(self.U_gg[m][:,:actual_rank] + self.V_gg[m][:,:actual_rank]); 
             del self.U_gg[m]; del self.V_gg[m]
-            self.d_g[m] = self.D_gg[m][:actual_rank]; # self.d_a[m][ self.d_a[m] < self.damping] = self.damping
+            self.d_g[m] = self.D_gg[m][:actual_rank]; # self.d_g[m][ self.d_g[m] < self.damping] = self.damping
             
             self.d_g[m].mul_((self.d_g[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
@@ -690,13 +690,13 @@ class B_R_KFACOptimizer(optim.Optimizer):
             self.d_g[m] = 0 * self.gg_for_reinit[m][0,:actual_rank]; self.Q_g[m] = 0 * self.gg_for_reinit[m][:,:actual_rank]
         elif m in self.size_0_of_CaSL_Kfactors_G:
             ### PARALLELIZE OVER layers: Set uncomputed quantities to zero to allreduce with SUM 
-            #if len(self.d_a) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
+            #if len(self.d_g) == 0: # if it's the 1st time we encouter these guys (i.e. at init during 1st evd computation before 1st allreduction)
             self.d_g[m] = 0 * self.d_g[m];  self.Q_g[m] = 0 * self.Q_g[m]
         
         #### so far dealt with CaSL modules ########################
-        #### now dealing with R update of LL modules ###############
+        #### G: now dealing with R update of LL modules ###############
         if (m in self.size_0_of_LL_Kfactors_G) and ( self.steps % (self.TInv * self.B_R_period) == 0 ) and self.steps > self.TInv:
-            if m in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank]:
+            if m in self.LL_modules_to_have_R_done_for_this_rank_G[self.rank]:
                 #perform the rsvd update
                 do_rsvd_decomp_for_G(adaptable_rank = self.adaptable_B_rank, rank_adaptation_multiplier = self.B_rank_adaptation_T_brand_updt_multiplier,
                                      T_ref = self.TCov, current_ranks = self.current_B_ranks_g, basic_rank = self.brand_r_target)
@@ -715,7 +715,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                 else:
                     self.d_g[m] = 0 * self.Q_g[m][0,:]
                 ##### END: zero-out as appropriate ################
-        #### END: now dealing with R update of LL modules ##########
+        #### END:G:  now dealing with R update of LL modules ##########
         # ====== END ======= GG^T KFACTORS ===================================
         
     @staticmethod
