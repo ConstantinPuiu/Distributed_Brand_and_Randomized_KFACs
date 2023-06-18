@@ -1108,6 +1108,11 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         #if it's CaSL, allocate to the same rank, but put in the correct dictionary
                         self.CaSL_modules_for_this_rank_G[key_rank].append(module_allocated)
             if self.debugger_rescheduler_timing == True: end_reschedule_time = time.time()
+            
+            ######  3.  SIMPLE Allocation R-update of LL layers for the R-step of B-modules (the B-R specific step) #####################
+            self.LL_modules_to_have_R_done_for_this_rank_A = self.LL_modules_for_this_rank_A
+            self.LL_modules_to_have_R_done_for_this_rank_G = self.LL_modules_for_this_rank_G
+            ######### END : SIMPLE Allocation R-update of LL layers for the R-step of B-modules (the B-R specific step) #################
         
         if self.debugger_rescheduler_timing == True and self.steps == 0:
             print('RANK {} Took {} s to reschedule and self.work_alloc_propto_RSVD_and_B_cost == {}'.format(self.rank, end_reschedule_time - start_reschedule_time , self.work_alloc_propto_RSVD_and_B_cost))
