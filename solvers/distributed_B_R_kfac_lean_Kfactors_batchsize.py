@@ -504,7 +504,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
             if self.steps > 0:
                 if module in self.LL_modules_to_have_R_done_for_this_rank_G[self.rank]:
                     #### update m_aa ############################################
-                    gg = self.CovAHandler(grad_output[0].data, module)
+                    gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
                     if self.steps == self.TCov:
                         # steps == TCov is exactly after we allocate LL modules to have R done across GPUs
                         self.m_gg[module] = (1 - self.stat_decay) * gg + 0
