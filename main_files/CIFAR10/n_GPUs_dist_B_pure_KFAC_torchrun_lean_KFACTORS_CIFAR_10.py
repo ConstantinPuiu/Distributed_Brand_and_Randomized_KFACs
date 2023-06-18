@@ -225,7 +225,9 @@ def main(world_size, args):
                                 clip_type = clip_type,
                                 brand_r_target_excess = brand_r_target_excess,
                                 brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
+                                #added to dea with truncation before inversion
                                 B_truncate_before_inversion = B_truncate_before_inversion,
+                                # added to deal with eff work alloc
                                 work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost,
                                 # for dealing with adaptable rsvd rank
                                 adaptable_rsvd_rank = adaptable_rsvd_rank,

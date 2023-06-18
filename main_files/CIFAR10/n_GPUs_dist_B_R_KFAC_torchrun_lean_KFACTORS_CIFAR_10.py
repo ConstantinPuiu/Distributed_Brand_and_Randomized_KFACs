@@ -135,10 +135,40 @@ def main(world_size, args):
     brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
     # ====================================================
     
-    #to deal with efficient work allocation
-    work_alloc_propto_RSVD_and_B_cost= args.work_alloc_propto_RSVD_and_B_cost
+    
+    ### rsvd adaptive rank ##########
+    if args.adaptable_rsvd_rank == 0:
+        adaptable_rsvd_rank = False
+    else:
+        adaptable_rsvd_rank = True
+    rsvd_rank_adaptation_TInv_multiplier = args.rsvd_rank_adaptation_TInv_multiplier
+    rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
+    maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
+    rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
     # ====================================================
     
+    ### B adaptive rank ##########
+    if args.adaptable_B_rank == 0:
+        adaptable_B_rank = False
+    else:
+        adaptable_B_rank = True
+    B_rank_adaptation_T_brand_updt_multiplier = args.B_rank_adaptation_T_brand_updt_multiplier
+    B_target_truncation_rel_err = args.B_target_truncation_rel_err
+    maximum_ever_admissible_B_rank = args.maximum_ever_admissible_B_rank    
+    B_adaptive_max_history = args.B_adaptive_max_history
+    # ===================================================
+    
+    #### for selcting net type ##############
+    net_type = args.net_type
+    #########################################
+    
+    ### added for efficient work allocation
+    if args.work_alloc_propto_RSVD_and_B_cost == 0:
+        work_alloc_propto_RSVD_and_B_cost = False
+    else:
+        work_alloc_propto_RSVD_and_B_cost = True
+    # ====================================================
+        
     ######## added to control whether we B-truncate before or after inversion ###########
     if args.B_truncate_before_inversion == 0:
         B_truncate_before_inversion = False
@@ -165,11 +195,18 @@ def main(world_size, args):
     train_set, testset, bsz = partition_dataset(collation_fct)
 
     # instantiate the model(it's your own model) and move it to the right device
-    model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
+    # instantiate the model(it's your own model) and move it to the right device
+    if net_type == 'Conv':
+        model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
                     num_classes = 10,
                     #growthRate = 12,
                     #compressionRate = 2,
                     widen_factor = 1).to(rank)
+    elif net_type == 'FC':
+        model = get_network('FC_net_for_CIFAR10', dropout = True, #depth = 19,
+                    num_classes = 10).to(rank)
+    else:
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
 
     # wrap the model with DDP
     # device_ids tell DDP where the model is
@@ -191,10 +228,23 @@ def main(world_size, args):
                                 brand_period = brand_period, 
                                 brand_r_target_excess = brand_r_target_excess,
                                 brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
-                                #efficient work allocation
+                                #added to dea with truncation before inversion
+                                B_truncate_before_inversion = B_truncate_before_inversion,
+                                # added to deal with eff work alloc
                                 work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost,
-                                # B-truncate before inversion siwtch
-                                B_truncate_before_inversion = B_truncate_before_inversion)#    optim.SGD(model.parameters(),
+                                # for dealing with adaptable rsvd rank
+                                adaptable_rsvd_rank = adaptable_rsvd_rank,
+                                rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
+                                maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
+                                rsvd_adaptive_max_history = rsvd_adaptive_max_history,
+                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
+                                # for dealing with adaptable B rank
+                                adaptable_B_rank = adaptable_B_rank,
+                                B_rank_adaptation_T_brand_updt_multiplier = B_rank_adaptation_T_brand_updt_multiplier,
+                                B_target_truncation_rel_err = B_target_truncation_rel_err,
+                                maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank,    
+                                B_adaptive_max_history = B_adaptive_max_history
+                                )#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
@@ -270,11 +320,28 @@ def parse_args():
     # ====================================================
     
     ### added to deal with more efficient work allocaiton
+    #
     parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=int, default=1, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set to any nonzero if yes. we use int rather than bool as argparse works badly with bool!' ) 
     
     #### added to allow for B-truncating just before inversion as well
     parser.add_argument('--B_truncate_before_inversion', type=int, default=0, help='Do we want to B-truncate just before inversion (more speed less accuracy) If so set to 1 (or anything other than 0). Standard way to deal with bools wiht buggy argparser that only work correctly wiht numbers!' ) 
-      
+    
+    #### added to deal with RSVD adaptable rank
+    parser.add_argument('--adaptable_rsvd_rank', type=int, default = 0, help='Set to any non-zero integer if we want R- adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--rsvd_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in rsvd: the ran will adapt to be around this error (but rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank)' ) 
+    parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
+    parser.add_argument('--rsvd_rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rsvd_rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
+    parser.add_argument('--rsvd_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
+    
+    #### added to deal with B- adaptable rank
+    parser.add_argument('--adaptable_B_rank', type=int, default = 0, help='Set to any non-zero integer if we want B- adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--B_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in B-update_truncation: the rank will adapt to be around this error (but B-truncation rank has to be strictly below maximum_ever_admissible_B_rank and above 70. Unlike rsvd it is not above 10. That is because using B with very small truncation rank effectively means we carry no information from before, in which case B is pointless. If you need smaller minimum admissible value than 70, edit the corresponding function in the file adaptive_rank_utils.py)' ) 
+    parser.add_argument('--maximum_ever_admissible_B_rank', type=int, default=500, help='B-truncation rank has to be strictly below maximum_ever_admissible_B_rank' ) 
+    parser.add_argument('--B_rank_adaptation_T_brand_updt_multiplier', type = int, default = 5, help = 'After B_rank_adaptation_T_brand_updt_multiplier * TCov * brand_update_multiplier_TCov steps we reconsider ranks')
+    parser.add_argument('--B_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
+    
+    ### for selecting net type
+    parser.add_argument('--net_type', type=str, default = 'Conv', help = 'type of net: Conv (gives VGG16_bn less maxpool) or FC (gives an adhoc FC net)' )
     args = parser.parse_args()
     return args
 
