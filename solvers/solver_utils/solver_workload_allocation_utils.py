@@ -2,40 +2,46 @@ import torch
 
 # wrappers ###############
 ## NOTE: for TESNOR ONLY use: allocate_work_timebased_tensors
-def allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD, batch_size):
+#for all 4 fct below  already_alloc_time_list is an optional argument a list wiht len = num workers where each element is how much load each worker starts with for this allocation
+ # if left blank it is assumed each worker starts with 0 load. Useful for B-R-KFAC allocations in particular
+def allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD, batch_size, already_alloc_time_list = None):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
                                                                   size_0_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A, 
                                                                   target_rank_ = target_rank_RSVD,
                                                                   oversampling_to_rank_ = 20, 
                                                                   batch_size_ = batch_size, 
-                                                                  type_of_cost = 'B') 
+                                                                  type_of_cost = 'B',
+                                                                  already_alloc_time_list = already_alloc_time_list) 
 
-def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD, oversampling_to_rank = 20):
+def allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD, oversampling_to_rank = 20, already_alloc_time_list = None):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
                                                                   size_0_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A, 
                                                                   target_rank_ = target_rank_RSVD, 
                                                                   oversampling_to_rank_ = oversampling_to_rank, # not required 
                                                                   batch_size_ = None, #not required
-                                                                  type_of_cost = 'RSVD')
+                                                                  type_of_cost = 'RSVD',
+                                                                  already_alloc_time_list = already_alloc_time_list)
 
-def allocate_EVD_inversion_work(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A):
+def allocate_EVD_inversion_work(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, already_alloc_time_list = None):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
                                                                   size_0_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A, 
                                                                   target_rank_ = None, #not required
                                                                   oversampling_to_rank_ = None, #not required
                                                                   batch_size_ = None, #not required
-                                                                  type_of_cost = 'EVD')
+                                                                  type_of_cost = 'EVD', 
+                                                                  already_alloc_time_list = already_alloc_time_list)
 
-def allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers, measured_invtime_of_all_Kfactors_G, measured_invtime_of_all_Kfactors_A):
+def allocate_ANYTHING_in_prop_to_MEASURED_time(number_of_workers, measured_invtime_of_all_Kfactors_G, measured_invtime_of_all_Kfactors_A, already_alloc_time_list = None):
     return allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, 
                                                                   size_0_of_all_Kfactors_G = measured_invtime_of_all_Kfactors_G, 
                                                                   size_0_of_all_Kfactors_A = measured_invtime_of_all_Kfactors_A, 
                                                                   target_rank_ = None, #not required
                                                                   batch_size_ = None, #not required
-                                                                  type_of_cost = 'time_given_instead_of_size')
+                                                                  type_of_cost = 'time_given_instead_of_size',
+                                                                  already_alloc_time_list = already_alloc_time_list)
 
 # end wrappers ###############
 
@@ -106,7 +112,8 @@ def predict_B_comptime_from_size_and_targrank(size, starting_rank, incoming_rank
 ####### END Helper functions for: predicting B-updt time based on size with measurements nd more sophssticated computation ######
 #################################################################################################################################
 
-def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_, oversampling_to_rank_, batch_size_, type_of_cost):
+def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_, 
+                                                           oversampling_to_rank_, batch_size_, type_of_cost, already_alloc_time_list = None):
     #### input:
     #number_of_workers = number of total workers we have ie worldsize
     # size_0_of_all_Kfactors_G - a dictionary where the key is the module, and the value is the size[0] of GG^T K-factor for that module
@@ -179,7 +186,7 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
             computation_time_for_G.append(size_0_of_all_Kfactors_G[key])
         
     ### compute raw allocations
-    optimal_allocation_a, optimal_allocation_g = optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G)
+    optimal_allocation_a, optimal_allocation_g, sum_loads_each_worker = optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G, already_alloc_time_list = already_alloc_time_list)
     
     #print(modules_as_keys_list_A); print(modules_as_keys_list_G); print(optimal_allocation_a); print(optimal_allocation_g)
     #print(computation_time_for_A); print(computation_time_for_G)
@@ -192,7 +199,7 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
         dict_of_lists_of_responsibilities_G[worker_number_g].append(modules_as_keys_list_G[module_idx_g])
         #print('G: Allocated module name = {}, and with index = {} to worker # {}'.format(modules_as_keys_list_G[module_idx_g],module_idx_g ,worker_number_g))
     
-    return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G
+    return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G, sum_loads_each_worker
 
 def allocate_RSVD_inversion_work_same_fixed_r_tensor(number_of_workers, size_0_of_all_Kfactors_A_tensor, 
                                                      size_0_of_all_Kfactors_G_tensor, target_rank_RSVD, modules_list):
@@ -273,7 +280,7 @@ def allocate_work_timebased_tensors(number_of_workers, tensor_computation_time_f
     return dict_of_lists_of_responsibilities_A, dict_of_lists_of_responsibilities_G #, tensor_sumtimes_for_each_module#, allocation_tensor_for_ranks#, tensor_sumtimes_for_each_module
 
 
-def optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G):
+def optimal_most_allocation(number_of_workers, computation_time_for_A, computation_time_for_G, already_alloc_time_list = None):
     # returns the most optimal possible allocation given the desired num workes and the comp times for A and G modules
     # return type is a tupe (list_a, list_g) where for each module-KFCTOR-type pair we say which worker will be allocated ot it
     # the module is inferred by the position in the list, and will be recovered using modules_as_keys_list called with the same idx as the idx of our output
@@ -281,13 +288,23 @@ def optimal_most_allocation(number_of_workers, computation_time_for_A, computati
     # the RELEVANT optimal defn here is minimize the difference between minimal and maximal total load per worker
     len_A = len(computation_time_for_A) ; len_G = len(computation_time_for_G); total_len = len_A + len_G
     list_alloc_module_a = [];  list_alloc_module_g = []
+    
+    ### Initialize sum of current work-load of all workers  ###############
+    if already_alloc_time_list is not None and len(already_alloc_time_list) == number_of_workers:
+        sum_loads_each_worker = already_alloc_time_list
+    else:
+        sum_loads_each_worker = [0] * number_of_workers
+    ### END: Initialize sum of current work-load of all workers  ###############
+    
     if number_of_workers >= total_len: # special case 1
         # do trivial allocation with 1 each
         for idx in range(0, len_A):
             list_alloc_module_a.append(idx)
+            sum_loads_each_worker[idx] += computation_time_for_A[idx]
         for idx in range(0, len_G):
             list_alloc_module_g.append(idx + len_A)
-    elif number_of_workers == total_len - 1: #special case 2
+            sum_loads_each_worker[idx] += computation_time_for_G[idx]
+        """elif number_of_workers == total_len - 1: #special case 2: NOT STRICTLY REQUIRED AS IT IS INCLUDED IN THE NEXT CASE
         lowest_idx = None; lowest_num = 1e16; second_lowest_idx = None; second_lowest_num = 1e16
         for idx, num in enumerate(computation_time_for_A + computation_time_for_G):
             if num < max(lowest_num, second_lowest_num):
@@ -325,7 +342,7 @@ def optimal_most_allocation(number_of_workers, computation_time_for_A, computati
         for el_g_idx, el_g in enumerate(list_alloc_module_g):
             if el_g == -1:
                 list_alloc_module_g[el_g_idx] = current_worker_to_allocate
-                current_worker_to_allocate += 1    
+                current_worker_to_allocate += 1    """
     else: # in the general case, we should really try all cases which has a # of (num_KFACT choose num_worers) * (num_KFAC - num_workers)^num_workers
         # then choose the one where max_sum_load - min_sum_load is minimal
         # hwever the number can get as large as 10^40 for 50 layers and 20 workers
@@ -339,8 +356,7 @@ def optimal_most_allocation(number_of_workers, computation_time_for_A, computati
         idxsort_dsc = argsort_descending(cpu_time_a_then_g_list)
         ##### END 1. sort each piece of effort into descending order in a bigger list #####
         
-        ##### 2. Initialize sum of current work-load of all workers and lists to be output ###############
-        sum_loads_each_worker = [0] * number_of_workers
+        ##### 2. Initialize lists to be output ###############
         list_alloc_module_a = [-1] * len_A # -1 means not allocate yet
         list_alloc_module_g = [-1] * len_G # -1 means not allocate yet
         ##### END 2. Initialize sum of current work-load of all workers and lists to be output ###########
@@ -360,8 +376,8 @@ def optimal_most_allocation(number_of_workers, computation_time_for_A, computati
         ## debugger return
         #return list_alloc_module_a, list_alloc_module_g, sum_loads_each_worker, max(sum_loads_each_worker) - min(sum_loads_each_worker)
         ##### END : 3. Loop over idxsort_dsc and allocate in a greedy fashion ############################
-        
-    return list_alloc_module_a, list_alloc_module_g
+    # sum_loads_each_worker is returned to know how many load-units each worker has been allocated - this can be used later to start allocation from here, for eg like in B-R-KFAC
+    return list_alloc_module_a, list_alloc_module_g, sum_loads_each_worker
 
 if __name__ == '__main__': ### testing
     """
@@ -383,6 +399,8 @@ if __name__ == '__main__': ### testing
     print(computation_time_for_A); print(computation_time_for_G)
     print('Output')
     print(optimal_most_allocation(2, computation_time_for_A, computation_time_for_G))
+    print(optimal_most_allocation(2, computation_time_for_A, computation_time_for_G, [268468225, 0]))
+    268468225
     print(optimal_most_allocation(3, computation_time_for_A, computation_time_for_G))
     print(optimal_most_allocation(4, computation_time_for_A, computation_time_for_G))
     print(optimal_most_allocation(5, computation_time_for_A, computation_time_for_G))
@@ -390,6 +408,8 @@ if __name__ == '__main__': ### testing
     print(optimal_most_allocation(7, computation_time_for_A, computation_time_for_G))
     print(optimal_most_allocation(8, computation_time_for_A, computation_time_for_G))
     print(optimal_most_allocation(9, computation_time_for_A, computation_time_for_G))
+    print(optimal_most_allocation(9, computation_time_for_A, computation_time_for_G, [268468225] * 8 + [0] ))
+    print(optimal_most_allocation(9, computation_time_for_A, computation_time_for_G, [268468225] + [0] * 8))
     print(optimal_most_allocation(10, computation_time_for_A, computation_time_for_G))
     
     print('TESTING outer function')

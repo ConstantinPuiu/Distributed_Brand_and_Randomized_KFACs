@@ -37,7 +37,11 @@ class B_R_KFACOptimizer(optim.Optimizer):
                  brand_period = 10, 
                  brand_r_target_excess = 0,
                  brand_update_multiplier_to_TCov = 1,
-                 B_truncate_before_inversion = False):
+                 # for efficient work allocation
+                 work_alloc_propto_RSVD_and_B_cost = True,
+                 # for B-turncating before inversion
+                 B_truncate_before_inversion = False
+                 ):
         
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
@@ -114,12 +118,16 @@ class B_R_KFACOptimizer(optim.Optimizer):
         self.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov
         self.sqr_1_minus_stat_decay = (1 - stat_decay)**(0.5) # to avoid recomputations
         self.batch_size = None
+        # for B-truncation before inversion switch
         self.B_truncate_before_inversion = B_truncate_before_inversion
         if B_truncate_before_inversion:
             self.Brand_S_update = Brand_S_update_truncate_before_invapplic
         else:
             self.Brand_S_update = Brand_S_update
         #######################################################################
+            
+        ### for efficient work allocation
+        self.work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost
         
         #### for tracking which modules are on Brand track and whicha ren't
         self.size_of_missing_m_aa = {} # dictionary tracking the size of lazy AA^T kfactors 

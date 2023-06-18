@@ -42,7 +42,9 @@ class B_KFACOptimizer(optim.Optimizer):
                  clip_type = 'non_standard',
                  brand_r_target_excess = 0,
                  brand_update_multiplier_to_TCov = 1,
+                 # for B-turncating before inversion
                  B_truncate_before_inversion = False,
+                 # for efficient work allocation
                  work_alloc_propto_RSVD_and_B_cost = True,
                  # for adaptive rsvd rank
                  adaptable_rsvd_rank = True,
@@ -907,7 +909,7 @@ class B_KFACOptimizer(optim.Optimizer):
         if self.steps == 0 and self.work_alloc_propto_RSVD_and_B_cost == True:
             if self.debugger_rescheduler_timing == True: start_reschedule_time = time.time()
             ############## Reallocate RSVD work (CaSL layers) ############################
-            self.CaSL_modules_for_this_rank_A, self.CaSL_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+            self.CaSL_modules_for_this_rank_A, self.CaSL_modules_for_this_rank_G, _ = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
                                                                                     size_0_of_all_Kfactors_G = self.size_0_of_CaSL_Kfactors_G,
                                                                                     size_0_of_all_Kfactors_A = self.size_0_of_CaSL_Kfactors_A,
                                                                                     target_rank_RSVD = self.rsvd_rank)
@@ -927,7 +929,7 @@ class B_KFACOptimizer(optim.Optimizer):
             ############ END REALLOCATED RSVD WORK (CASL LAYERS) #########################
                     
             ############## Reallocate B-update work (CaSL layers) ############################
-            self.LL_modules_for_this_rank_A, self.LL_modules_for_this_rank_G = allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers = self.world_size, 
+            self.LL_modules_for_this_rank_A, self.LL_modules_for_this_rank_G, _ = allocate_B_inversion_work_same_fixed_r_and_batchsize(number_of_workers = self.world_size, 
                                                                                     size_0_of_all_Kfactors_G = self.size_0_of_LL_Kfactors_G,
                                                                                     size_0_of_all_Kfactors_A = self.size_0_of_LL_Kfactors_A,
                                                                                     target_rank_RSVD = self.rsvd_rank,

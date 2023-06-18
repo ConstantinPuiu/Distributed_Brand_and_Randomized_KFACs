@@ -711,7 +711,7 @@ class R_KFACOptimizer(optim.Optimizer):
             # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
             # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
             if not self.work_eff_alloc_with_time_measurement:
-                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G, _ = allocate_RSVD_inversion_work_same_fixed_r(number_of_workers = self.world_size, 
                                                                                 size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
                                                                                 size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A,
                                                                                 target_rank_RSVD = self.rsvd_rank,

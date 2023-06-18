@@ -134,6 +134,9 @@ def main(world_size, args):
     brand_r_target_excess = args.brand_r_target_excess
     brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
     # ====================================================
+    
+    #to deal with efficient work allocation
+    work_alloc_propto_RSVD_and_B_cost= args.work_alloc_propto_RSVD_and_B_cost
     # ====================================================
     
     ######## added to control whether we B-truncate before or after inversion ###########
@@ -188,6 +191,9 @@ def main(world_size, args):
                                 brand_period = brand_period, 
                                 brand_r_target_excess = brand_r_target_excess,
                                 brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
+                                #efficient work allocation
+                                work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost,
+                                # B-truncate before inversion siwtch
                                 B_truncate_before_inversion = B_truncate_before_inversion)#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
@@ -263,9 +269,11 @@ def parse_args():
     parser.add_argument('--brand_update_multiplier_to_TCov', type=int, default=1, help='The factor by which the B-update frequency is LOWER than the frequency at which we reiceve new K-factor information' )
     # ====================================================
     
+    ### added to deal with more efficient work allocaiton
+    parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=int, default=1, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set to any nonzero if yes. we use int rather than bool as argparse works badly with bool!' ) 
+    
     #### added to allow for B-truncating just before inversion as well
     parser.add_argument('--B_truncate_before_inversion', type=int, default=0, help='Do we want to B-truncate just before inversion (more speed less accuracy) If so set to 1 (or anything other than 0). Standard way to deal with bools wiht buggy argparser that only work correctly wiht numbers!' ) 
-    
       
     args = parser.parse_args()
     return args

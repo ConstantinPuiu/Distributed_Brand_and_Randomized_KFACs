@@ -315,7 +315,7 @@ def parse_args():
     parser.add_argument('--brand_update_multiplier_to_TCov', type=int, default=1, help='The factor by which the B-update frequency is LOWER than the frequency at which we reiceve new K-factor information' )
     # ====================================================
       
-    ### added to deal with more efficient wokr allocaiton
+    ### added to deal with more efficient work allocaiton
     #
     parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=int, default=1, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set to any nonzero if yes. we use int rather than bool as argparse works badly with bool!' ) 
     
