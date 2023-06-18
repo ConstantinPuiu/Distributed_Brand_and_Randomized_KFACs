@@ -589,12 +589,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
             oversampled_rank, actual_rank = get_actual_and_oversampled_rank_aa(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks, basic_rank,
                                                                                self.m_aa[m].shape[0])
             #### END: A: select correct target (adaptive) RSVD rank ################
-            
-            self.U_aa[m], self.D_aa[m], self.V_aa[m] = torch.svd_lowrank(self.m_aa[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
-            self.Q_a[m] = self.V_aa[m][:,:actual_rank] + 0.0 # 0.5*(self.U_aa[m][:,:actual_rank] + self.V_aa[m][:,:actual_rank]); 
-            del self.U_aa[m]; del self.V_aa[m]
-            self.d_a[m] = self.D_aa[m][:actual_rank]; # self.d_a[m][ self.d_a[m] < self.damping] = self.damping
-            
+            self.d_a[m], self.Q_a[m] = RSVD_lowrank(M = self.m_aa[m], oversampled_rank = oversampled_rank, 
+                                                    target_rank = actual_rank, niter = self.rsvd_niter, start_matrix = None)
             self.d_a[m].mul_((self.d_a[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_a[m] = self.Q_a[m].contiguous()
@@ -669,12 +665,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
             oversampled_rank, actual_rank = get_actual_and_oversampled_rank_gg(adaptable_rank, T_ref, rank_adaptation_multiplier, current_ranks,
                                                                                basic_rank, self.m_gg[m].shape[0])
             #### END: G: select correct target (adaptive) RSVD rank ################
-            
-            self.U_gg[m], self.D_gg[m], self.V_gg[m] = torch.svd_lowrank(self.m_gg[m], q = oversampled_rank, niter = self.rsvd_niter, M = None) # this is rsvd
-            self.Q_g[m] = self.V_gg[m][:,:actual_rank] + 0.0 # 0.5*(self.U_gg[m][:,:actual_rank] + self.V_gg[m][:,:actual_rank]); 
-            del self.U_gg[m]; del self.V_gg[m]
-            self.d_g[m] = self.D_gg[m][:actual_rank]; # self.d_g[m][ self.d_g[m] < self.damping] = self.damping
-            
+            self.d_g[m], self.Q_g[m] = RSVD_lowrank(M = self.m_gg[m], oversampled_rank = oversampled_rank,
+                                                    target_rank = actual_rank, niter = self.rsvd_niter, start_matrix = None)            
             self.d_g[m].mul_((self.d_g[m] > eps).float())
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_g[m] = self.Q_g[m].contiguous()
