@@ -354,20 +354,21 @@ class B_R_KFACOptimizer(optim.Optimizer):
                  
             ### deal with R updates of B modules ###################################
             # any module in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank] CANNOT be in CaSL, so clearly we cannot double the same update
-            if module in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank]:
-                #### update m_aa ############################################
-                aa = self.CovAHandler(input[0].data, module)
-                if self.steps == self.TCov:
-                    # steps == TCov is exactly after we allocate LL modules to have R done across GPUs
-                    self.m_aa[module] = (1 - self.stat_decay) * aa + 0
-                    self.nkfu_dict_a[module] = 1 # only at initialization we update nkfu, though according to the B update the nkfu is 1 step higher, we take the nkfu according to the R, as this is a bit more behind, and we are conservative
-                    # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
-                    # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
-                else:
-                    update_running_stat(aa, self.m_aa[module], self.stat_decay)
-                    # nkfu not updated as it will be updated in the previus if, elif, elif, else structure
-                #### END: update m_aa ############################################
-            ### deal with R updates of B modules ###################################
+            if self.steps > 0:
+                if module in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank]:
+                    #### update m_aa ############################################
+                    aa = self.CovAHandler(input[0].data, module)
+                    if self.steps == self.TCov:
+                        # steps == TCov is exactly after we allocate LL modules to have R done across GPUs
+                        self.m_aa[module] = (1 - self.stat_decay) * aa + 0
+                        self.nkfu_dict_a[module] = 1 # only at initialization we update nkfu, though according to the B update the nkfu is 1 step higher, we take the nkfu according to the R, as this is a bit more behind, and we are conservative
+                        # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
+                        # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
+                    else:
+                        update_running_stat(aa, self.m_aa[module], self.stat_decay)
+                        # nkfu not updated as it will be updated in the previus if, elif, elif, else structure
+                    #### END: update m_aa ############################################
+                ### deal with R updates of B modules ###################################
            
 
     def _save_grad_output(self, module, grad_input, grad_output):
@@ -500,19 +501,20 @@ class B_R_KFACOptimizer(optim.Optimizer):
             
             ### deal with R updates of B modules ###################################
             # any module in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank] CANNOT be in CaSL, so clearly we cannot double the same update
-            if module in self.LL_modules_to_have_R_done_for_this_rank_G[self.rank]:
-                #### update m_aa ############################################
-                gg = self.CovAHandler(input[0].data, module)
-                if self.steps == self.TCov:
-                    # steps == TCov is exactly after we allocate LL modules to have R done across GPUs
-                    self.m_gg[module] = (1 - self.stat_decay) * gg + 0
-                    self.nkfu_dict_a[module] = 1 # only at initialization we update nkfu, though according to the B update the nkfu is 1 step higher, we take the nkfu according to the R, as this is a bit more behind, and we are conservative
-                    # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
-                    # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
-                else:
-                    update_running_stat(gg, self.m_aa[module], self.stat_decay)
-                    # nkfu not updated as it will be updated in the previus if, elif, elif, else structure
-                #### END: update m_aa ############################################
+            if self.steps > 0:
+                if module in self.LL_modules_to_have_R_done_for_this_rank_G[self.rank]:
+                    #### update m_aa ############################################
+                    gg = self.CovAHandler(input[0].data, module)
+                    if self.steps == self.TCov:
+                        # steps == TCov is exactly after we allocate LL modules to have R done across GPUs
+                        self.m_gg[module] = (1 - self.stat_decay) * gg + 0
+                        self.nkfu_dict_a[module] = 1 # only at initialization we update nkfu, though according to the B update the nkfu is 1 step higher, we take the nkfu according to the R, as this is a bit more behind, and we are conservative
+                        # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
+                        # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
+                    else:
+                        update_running_stat(gg, self.m_aa[module], self.stat_decay)
+                        # nkfu not updated as it will be updated in the previus if, elif, elif, else structure
+                    #### END: update m_aa ############################################
             ##########################################################
             
     def _prepare_model(self):
