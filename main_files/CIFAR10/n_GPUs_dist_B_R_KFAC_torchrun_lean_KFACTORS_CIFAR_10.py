@@ -130,7 +130,7 @@ def main(world_size, args):
     TInv_period = args.TInv_period
     
     ######### BRAND K-fac (also BRSKFAC) specific parameters
-    brand_period = args.brand_period 
+    B_R_period = args.B_R_period
     brand_r_target_excess = args.brand_r_target_excess
     brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
     # ====================================================
@@ -225,7 +225,7 @@ def main(world_size, args):
                                 rsvd_niter = rsvd_niter,
                                 damping_type = damping_type, #'adaptive',
                                 clip_type = clip_type,
-                                brand_period = brand_period, 
+                                B_R_period = B_R_period, 
                                 brand_r_target_excess = brand_r_target_excess,
                                 brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
                                 #added to dea with truncation before inversion
@@ -314,7 +314,7 @@ def parse_args():
     parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTAITONS' )
     
     ######### BRAND K-fac (also BRSKFAC) specific parameters
-    parser.add_argument('--brand_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period)' )
+    parser.add_argument('--B_R_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period)' )
     parser.add_argument('--brand_r_target_excess', type=int, default=0, help='How many more modes to keep in the B-(.) than in the R-(.) reprezentation' )
     parser.add_argument('--brand_update_multiplier_to_TCov', type=int, default=1, help='The factor by which the B-update frequency is LOWER than the frequency at which we reiceve new K-factor information' )
     # ====================================================
@@ -351,8 +351,8 @@ if __name__ == '__main__':
     now_start = datetime.now()
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
-    print('\nStarted again, Current Time = {} \n for B-R-KFAC lean with brand_period = {}, brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.brand_period, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
-    print('Important args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {} \n'.format('NOT IMPLEMENTED YET', args.B_truncate_before_inversion))
+    print('\nStarted again, Current Time = {} \n for B-R-KFAC lean with  B_R_period= {}, brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.B_R_period, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
+    print('Important args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rsvd_rank_adaptation_TInv_multiplier = {};\n --adaptable_B_rank = {}; \n --B_rank_adaptation_T_brand_updt_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier,args.adaptable_B_rank, args.B_rank_adaptation_T_brand_updt_multiplier))
     #print('type of brand_r_target_excess is {}'.format(type(args.brand_r_target_excess)))
     print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
