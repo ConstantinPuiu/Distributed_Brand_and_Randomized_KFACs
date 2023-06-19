@@ -219,7 +219,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
         #### end: for adaptable B rank ####
         
         ### for dealing with the correction (the C in B-R-C)
-        self.correction_multiplier_TCov = correction_multiplier_TCov,
+        self.correction_multiplier_TCov = correction_multiplier_TCov
         self.brand_corection_dim_frac = brand_corection_dim_frac
         
         self._prepare_model()
@@ -298,7 +298,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
                 ##### END: initialize m_aa or associated tensors ##################
                
             elif module in self.LL_modules_for_this_rank_A[self.rank]:
-                if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                if self.steps % self.T_brand_updt == 0:
                     self.nkfu_dict_a[module] += 1
                     if self.steps % (self.TInv * self.B_R_period) != 0:
                         # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
@@ -323,7 +323,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
                         ########### END BRAND UPDATE ##########################
                         
                         ########### perform random correction #######################################################################
-                        if self.steps % (self.TCov * self.correction_multiplier_TCov * self.brand_update_multiplier_to_TCov) == 0:
+                        if self.steps % (self.T_brand_updt * self.correction_multiplier_TCov) == 0:
                             self.Q_a[module], self.d_a[module] = perform_C_correction(Q = self.Q_a[module], d = self.d_a[module], m_aa_or_gg = self.m_aa[module], 
                                                                                       brand_corection_dim_frac = self.brand_corection_dim_frac)
                         ########### END: perform random correction ###################################################################
@@ -346,7 +346,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
             else: 
                 # if the module is NOT the responsibility of *this GPU from the point of view of LL and CaSL
                 if module in self.size_0_of_LL_Kfactors_A:
-                    if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0 and self.steps % (self.TInv * self.B_R_period) != 0: 
+                    if self.steps % self.T_brand_updt == 0 and self.steps % (self.TInv * self.B_R_period) != 0: 
                         # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                         if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
@@ -457,7 +457,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
                 ##### end : initialize m_gg or associated tensors ################
                
             elif module in self.LL_modules_for_this_rank_G[self.rank]:
-                if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+                if self.steps % self.T_brand_updt == 0:
                     self.nkfu_dict_g[module] += 1
                     if self.steps % (self.TInv * self.B_R_period) != 0:
                         # if the module is the responsibility of *this GPU, AND the module is on Brand-track, and it's time to Brand-update
@@ -482,7 +482,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
                         ########### END BRAND UPDATE #########################
                         
                         ########### perform random correction #######################################################################
-                        if self.steps % (self.TCov * self.correction_multiplier_TCov * self.brand_update_multiplier_to_TCov) == 0:
+                        if self.steps % (self.T_brand_updt * self.correction_multiplier_TCov) == 0:
                             self.Q_g[module], self.d_g[module] = perform_C_correction(Q = self.Q_g[module], d = self.d_g[module], m_aa_or_gg = self.m_gg[module], 
                                                                                       brand_corection_dim_frac = self.brand_corection_dim_frac)
                         ########### END: perform random correction ##################################################################
@@ -505,7 +505,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
             else: 
                 # if the module is NOT the responsibility of *this GPU AT ALL!
                 if module in self.size_0_of_LL_Kfactors_G:
-                    if self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0 and self.steps % (self.TInv * self.B_R_period) != 0: 
+                    if self.steps % self.T_brand_updt == 0 and self.steps % (self.TInv * self.B_R_period) != 0: 
                         # NOTE: the keys to self.size_0_of_LL_Kfactors_A are all the brand-tacked linear layers, ie "LL" layers
                         # if the KFACTOR is LL and some other GPU does the brand-update of it: restart Q_a and d_a to zeros
                         if self.adaptable_B_rank == True and (self.steps - self.T_brand_updt) % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier) == 0 and (self.steps - self.T_brand_updt) > 0:
@@ -879,7 +879,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
         # take the step and allreduce across evd's if the inverses were updated    
         for m in self.modules:
             classname = m.__class__.__name__
-            if ((m not in self.size_0_of_LL_Kfactors_A) and (self.steps % self.TInv == 0)) or ((m in self.size_0_of_LL_Kfactors_A) and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0)):
+            if ((m not in self.size_0_of_LL_Kfactors_A) and (self.steps % self.TInv == 0)) or ((m in self.size_0_of_LL_Kfactors_A) and (self.steps % self.T_brand_updt == 0)):
                 # m not in self.size_0_of_LL_Kfactors_A should be perfectly equivalent to m in self.size_0_of_CaSL_Kfactors_A
                 # if the inversion was done locally this turn, allreduce to disseminate inverse representation
                 #if it's time to recompute inverse for Conv layers or for liear (BRAND) layers
@@ -904,7 +904,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. AFTER Allreduce d_a={}, size_d_a = {}, Q_a = {}, size_Q_a = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_a[m], self.d_a[m].shape, self.Q_a[m], self.Q_a[m].shape))
             
-            if ((m not in self.size_0_of_LL_Kfactors_G) and (self.steps % self.TInv == 0)) or ((m in self.size_0_of_LL_Kfactors_G) and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0)):
+            if ((m not in self.size_0_of_LL_Kfactors_G) and (self.steps % self.TInv == 0)) or ((m in self.size_0_of_LL_Kfactors_G) and (self.steps % self.T_brand_updt == 0)):
                 #print('RANK {}. Doing line : dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
                 if self.dist_comm_for_layers_debugger:
                     print('RANK {}. STEP {}. WORLDSIZE {}. MODULE {}. Before Allreduce d_g={}, size_d_g = {}, Q_g = {}, size_Q_g = {} \n'.format(self.rank, self.steps, self.world_size, m, self.d_g[m], self.d_g[m].shape, self.Q_g[m], self.Q_g[m].shape))
@@ -994,7 +994,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
             ## because we are putting this right after the communication which hapens when (m not in self.size_0_of_LL_Kfactors_G) and (self.steps % self.TInv == 0)
             ## we get that all d_a and d_g are the same across all GPUs, so all the prev _svd_trunc_error are the same across all gpus 
             ## and thus the allocation will be the same across all GPUs - which si what we want - otherwise it gets buggy
-            if self.adaptable_B_rank == True and self.steps % (self.TCov * self.brand_update_multiplier_to_TCov) == 0:
+            if self.adaptable_B_rank == True and self.steps % self.T_brand_updt == 0:
                 if m in self.size_0_of_LL_Kfactors_A: 
                     # if we do adaptable rank thing, save the rank and error data/statistics
                     ####### A: append rank and errors #### since done after communication we have global info everywhere ##########
@@ -1017,7 +1017,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov * self.B_rank_adaptation_T_brand_updt_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_B_ranks_a = {}'.format(self.rank, self.steps, self.current_B_ranks_a))
                         self.current_B_ranks_a[m] = get_new_B_rank(self.all_prev_B_trunc_errs_a[m], self.all_prev_B_used_ranks_a[m], 
                                                                          max_rank = self.maximum_ever_admissible_B_rank, #tensor_size = self.Q_a[m].shape[0],
@@ -1045,7 +1045,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
                     #### END: avoid too long time history: cap it to self.rsvd_adaptive_max_history #######
                     
                     # Start: compute new ranks #########
-                    if self.steps != 0 and (self.steps % (self.TCov * self.brand_update_multiplier_to_TCov * self.B_rank_adaptation_T_brand_updt_multiplier)) == 0:
+                    if self.steps != 0 and (self.steps % (self.T_brand_updt * self.B_rank_adaptation_T_brand_updt_multiplier)) == 0:
                         #print('RANK = {}. STEPS = {} . self.current_B_ranks_g = {}'.format(self.rank, self.steps, self.current_B_ranks_g))
                         self.current_B_ranks_g[m] = get_new_B_rank(self.all_prev_B_trunc_errs_g[m], self.all_prev_B_used_ranks_g[m], 
                                                                          max_rank = self.maximum_ever_admissible_B_rank,#tensor_size = self.Q_g[m].shape[0],

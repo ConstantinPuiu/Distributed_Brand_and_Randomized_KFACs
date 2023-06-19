@@ -357,7 +357,7 @@ def parse_args():
     ### for dealing with the correction (the C in B-R-C)
     ### strictly speaking the C can't be switch off, it's always on, if you want off, use B-R. Can set very large to have it off practically, in whihc case we're doing B-R
     parser.add_argument('--correction_multiplier_TCov', type=int, default=5, help='How often to correct (a partial RSVD) the LL B-update representation' )
-    parser.add_argument('--brand_corection_dim_frac', type=int, default=0.2, help='what percentage of modes to refresh in the correction (avoid using close to 100% - at 100% the correction is as expensive an an RSVD and doing an RSVD is cheaper - in that case use B-R with higher "R" requency (for LLs)' )
+    parser.add_argument('--brand_corection_dim_frac', type=float, default=0.2, help='what percentage of modes to refresh in the correction (avoid using close to 100% - at 100% the correction is as expensive an an RSVD and doing an RSVD is cheaper - in that case use B-R with higher "R" requency (for LLs)' )
     
     args = parser.parse_args()
     return args
