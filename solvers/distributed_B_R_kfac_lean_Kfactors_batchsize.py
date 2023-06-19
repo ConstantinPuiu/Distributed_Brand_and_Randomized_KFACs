@@ -151,12 +151,6 @@ class B_R_KFACOptimizer(optim.Optimizer):
         self.LL_modules_to_have_R_done_for_this_rank_G = {}
         #####################################
         
-        #### for tracking which modules are on Brand track and whicha ren't
-        self.size_of_missing_m_aa = {} # dictionary tracking the size of lazy AA^T kfactors 
-        self.size_of_missing_m_gg = {} # dictionary tracking the size of lazy GG^T kfactors 
-        self.size_of_nonlazy_Kfactors_a = {} # dictionary tracking the size of NON-lazy & non-brand-tracked AA^T kfactors 
-        self.size_of_nonlazy_Kfactors_g = {} # dictionary tracking the size of NON-lazy & non-brand-tracked AA^T kfactors 
-        
         ################ for efficient work allocation
         self.work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost
         ### dict for sizes of all modules, split by LL vs CaSL cathegory
