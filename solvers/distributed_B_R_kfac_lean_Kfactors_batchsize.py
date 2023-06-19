@@ -193,9 +193,8 @@ class B_R_KFACOptimizer(optim.Optimizer):
         self.all_prev_rsvd_used_ranks_a = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_rsvd_trunc_errs_g = {} # stores all prev truncation errors for all local modules as lists
         self.all_prev_rsvd_used_ranks_g = {} # stores all prev truncation errors for all local modules as lists
-        if self.adaptable_rsvd_rank == True or adaptable_B_rank == True:
-            # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
-            self.aa_for_reinit = {}; self.gg_for_reinit = {} 
+        # for nonlazy tensors can use self.m_aa / self.m_gg and only use these for lazy tensors: saves memory but it gets messy
+        self.aa_for_reinit = {}; self.gg_for_reinit = {} 
         #### end: for adaptable rsvd rank ####
             
         #### for adaptable B rank ####
@@ -354,7 +353,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
                  
             ### deal with R updates of B modules ###################################
             # any module in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank] CANNOT be in CaSL, so clearly we cannot double the same update
-            if self.steps > 0:
+            if self.steps > 0 and module in self.size_0_of_LL_Kfactors_A: 
                 if module in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank]:
                     #### update m_aa ############################################
                     aa = self.CovAHandler(input[0].data, module)
@@ -364,10 +363,14 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         self.nkfu_dict_a[module] = 1 # only at initialization we update nkfu, though according to the B update the nkfu is 1 step higher, we take the nkfu according to the R, as this is a bit more behind, and we are conservative
                         # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                         # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
-                    else:
+                    else: 
                         update_running_stat(aa, self.m_aa[module], self.stat_decay)
                         # nkfu not updated as it will be updated in the previus if, elif, elif, else structure
                     #### END: update m_aa ############################################
+                else: # if it's linear but not in the LL modules *this GPU is doing the RSVD of (the R of B-R)
+                    if module not in self.aa_for_reinit: # if we haven't stored the reinit point for this module-g alread, store it
+                        aa = self.CovAHandler(input[0].data, module)
+                        self.aa_for_reinit[module] = aa
                 ### deal with R updates of B modules ###################################
            
 
@@ -501,7 +504,7 @@ class B_R_KFACOptimizer(optim.Optimizer):
             
             ### deal with R updates of B modules ###################################
             # any module in self.LL_modules_to_have_R_done_for_this_rank_A[self.rank] CANNOT be in CaSL, so clearly we cannot double the same update
-            if self.steps > 0:
+            if self.steps > 0 and module in self.size_0_of_LL_Kfactors_G:
                 if module in self.LL_modules_to_have_R_done_for_this_rank_G[self.rank]:
                     #### update m_aa ############################################
                     gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
@@ -515,6 +518,10 @@ class B_R_KFACOptimizer(optim.Optimizer):
                         update_running_stat(gg, self.m_gg[module], self.stat_decay)
                         # nkfu not updated as it will be updated in the previus if, elif, elif, else structure
                     #### END: update m_aa ############################################
+                else: # if it's linear but not in the LL modules *this GPU is doing the RSVD of (the R of B-R)
+                    if module not in self.gg_for_reinit: # if we haven't stored the reinit point for this module-g alread, store it
+                        gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
+                        self.gg_for_reinit[module] = gg
             ##########################################################
             
     def _prepare_model(self):
