@@ -155,6 +155,8 @@ def main(world_size, args):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
 
     train_set, testset, bsz = partition_dataset(collation_fct)
+    len_train_set = len(train_set)
+    print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
 
     # instantiate the model(it's your own model) and move it to the right device
     model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
@@ -214,9 +216,9 @@ def main(world_size, args):
             #print('rank = {} at step ={} has loss.item() = {}'.format(rank,optimizer.steps,loss.item()))
 
             loss.backward()
-            if jdx % 150 == 0 and epoch == n_epochs - 1:
+            if jdx == len_train_set - 1 and epoch == n_epochs - 1:
                 tend = time.time()
-                print('TIME: {}. Rank (GPU number) {} at batch {}:'.format(tend-tstart, rank, jdx) + str(dist.get_rank())+ ', epoch ' +str(epoch + 1) + ', loss: {}\n'.format(str(loss.item())))
+                print('TIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(tend-tstart, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', loss: {}\n'.format(str(loss.item())))
                 #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
                 #    f.write('Rank (GPU number) {} at batch {}:'.format(rank, jdx) + str(dist.get_rank())+ ', epoch ' +str(epoch+1) + ', loss: {}\n'.format(str(loss.item())))
             optimizer.step(epoch_number = epoch + 1, error_savepath = None)
