@@ -22,7 +22,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 
 #mpiexec python ./attempt_2_GPUs_naive_KFAC.py
 #NCCL_BLOCKING_WAIT=1
-OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epoch 10 \
+OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epoch 6 \
 --work_alloc_propto_EVD_cost 1 \
 --TInv_schedule_flag 0 --TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0
 
