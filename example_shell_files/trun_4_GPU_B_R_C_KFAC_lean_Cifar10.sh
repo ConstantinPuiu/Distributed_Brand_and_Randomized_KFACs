@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:20:00
+#SBATCH --time=00:10:00
 #SBATCH --job-name=2G_BRK
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
