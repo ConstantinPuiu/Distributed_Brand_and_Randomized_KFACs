@@ -22,4 +22,13 @@ source activate /data/math-opt-ml/chri5570/myenv
 
 #mpiexec python ./attempt_4_GPUs_naive_KFAC.py
 #NCCL_BLOCKING_WAIT=1
-OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_B_R_C_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 1 --n_epochs 5 --B_R_period 5 --brand_update_multiplier_to_TCov 1 --B_truncate_before_inversion 1 --work_alloc_propto_RSVD_and_B_cost 1 --B_truncate_before_inversion 1 --adaptable_rsvd_rank 1 --rsvd_rank_adaptation_TInv_multiplier 1 --adaptable_B_rank 1 --B_rank_adaptation_T_brand_updt_multiplier 1 --correction_multiplier_TCov 5 --brand_corection_dim_frac 0.2
+OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_B_R_C_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 1 --n_epochs 5 \
+--brand_update_multiplier_to_TCov 1 \
+--B_R_period 5 \
+--B_truncate_before_inversion 1 \
+--work_alloc_propto_RSVD_and_B_cost 1 \
+--adaptable_rsvd_rank 1 --rsvd_rank_adaptation_TInv_multiplier 1 \
+--adaptable_B_rank 1 --B_rank_adaptation_T_brand_updt_multiplier 1 \
+--correction_multiplier_TCov 5 --brand_corection_dim_frac 0.2 \
+--TInv_schedule_flag 1 --TCov_schedule_flag 1 --brand_update_multiplier_to_TCov_schedule_flag 1 --B_R_period_schedule_flag 1 --correction_multiplier_TCov 1 --KFAC_damping_schedule_flag 1
+
