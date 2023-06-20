@@ -121,17 +121,34 @@ def main(world_size, args):
     ### FLAG for efficient wor allocaiton  ###
     work_alloc_propto_EVD_cost = args.work_alloc_propto_EVD_cost
     
-    ################### SCHEDULES ###### TO DO: MAKE THE SCHEDULES INPUTABLE FORM COMMAND LINE #####################
-    # dict to have schedule! eys are epochs: key map to frequency, stuff only changes at keys and then stays constant.
-    KFAC_matrix_update_frequency_dict = {0: TCov_period, 5: TCov_period}#, 10: 5, 20: 5, 22: 5, 50: 5}
-    KFAC_matrix_invert_frequency_dict = {0: TInv_period, 5: TInv_period}#, 10: 20, 20: 20, 22: 20, 50: 20}
+    ################################  SCHEDULES ######################################################################
+    ### for dealing with PERIOD SCHEDULES
+    if args.TInv_schedule_flag == 0: # then it's False
+        TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
+    else:# if the flag is True
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.KFAC_schedules import TInv_schedule
+        if 0 in TInv_schedule.keys(): # overwrite TInv_period
+            print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
+            TInv_period = TInv_schedule[0]
     
-    KFAC_damping_dict = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
+    if args.TCov_schedule_flag == 0: # then it's False
+        TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+    else: # if the flag is True
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.KFAC_schedules import TCov_schedule
+        if 0 in TCov_schedule.keys(): # overwrite TInv_period
+            print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TCov_period, TCov_schedule[0]))
+            TCov_period = TCov_schedule[0]
+    
+    #########################################
+            
+    ### for dealing with other parameters SCHEDULES ####
+    if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
+        KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
+    else:
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.KFAC_schedules import KFAC_damping_schedule
+    KFAC_damping = KFAC_damping_schedule[0]
     ### TO DO: implement the schedules properly: now only sticks at the first entryforever in all 3
     ################################ END SCHEDULES ###################################################################
-    KFAC_matrix_update_frequency = KFAC_matrix_update_frequency_dict[0]
-    KFAC_matrix_invert_frequency = KFAC_matrix_invert_frequency_dict[0]
-    KFAC_damping = KFAC_damping_dict[0]
     ####
     
     def collation_fct(x):
@@ -156,8 +173,8 @@ def main(world_size, args):
     optimizer =  KFACOptimizer(model, rank = rank, world_size = world_size, 
                                lr_function = l_rate_function, momentum = momentum, stat_decay = stat_decay, 
                                 kl_clip = kfac_clip, damping = KFAC_damping, 
-                                weight_decay = WD, TCov = KFAC_matrix_update_frequency,
-                                TInv = KFAC_matrix_invert_frequency,
+                                weight_decay = WD, TCov = TCov_period,
+                                TInv = TInv_period,
                                 work_alloc_propto_EVD_cost = work_alloc_propto_EVD_cost)#    optim.SGD(model.parameters(),
                                 #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
@@ -168,12 +185,14 @@ def main(world_size, args):
         # if we are using DistributedSampler, we have to tell it which epoch this is
         #dataloader.sampler.set_epoch(epoch)
         
-        if epoch+1 in KFAC_matrix_update_frequency_dict:
-            optimizer.TCov =  KFAC_matrix_update_frequency_dict[epoch+1]
-        if epoch+1 in KFAC_matrix_invert_frequency_dict:
-            optimizer.TInv = KFAC_matrix_invert_frequency_dict[epoch+1]
-        if epoch+1 in KFAC_damping_dict: 
-            optimizer.param_groups[0]['damping'] = KFAC_damping_dict[epoch+1]
+        ######### setting parameters according to SCHEDULES ###################
+        if epoch in TCov_schedule:
+            optimizer.TCov =  TCov_schedule[epoch]
+        if epoch in TInv_schedule:
+            optimizer.TInv = TInv_schedule[epoch]
+        if epoch in KFAC_damping_schedule: 
+            optimizer.param_groups[0]['damping'] = KFAC_damping_schedule[epoch]
+        ######### END: setting parameters according to SCHEDULES ##############
         
         for jdx, (x,y) in enumerate(train_set):#dataloader):
             #print('\ntype(x) = {}, x = {}, x.get_device() = {}\n'.format(type(x), x, x.get_device()))
@@ -220,6 +239,16 @@ def parse_args():
     
     #### for efficient work allocaiton selection
     parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
+    
+    ############# SCHEDULE FLAGS #####################################################
+    ### for dealing with PERIOD SCHEDULES
+    parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/KFAC_schedules.py' ) 
+    parser.add_argument('--TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TCov_schedule (schedule dict for TCov) from solver/schedules/KFAC_schedules.py' ) 
+    ###for dealing with other optimizer schedules
+    parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/schedules/KFAC_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
+    
+    ############# END: SCHEDULE FLAGS #################################################
+    
     args = parser.parse_args()
     return args
 
@@ -230,8 +259,10 @@ if __name__ == '__main__':
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for KFAC lean\n'.format(now_start))
-    print('Important args were:\n  --work_alloc_propto_EVD_cost = {} ; \n'.format(args.work_alloc_propto_EVD_cost))
-    print('Doing << {} >> epochs'.format(args.n_epochs))
+    print('\nImportant args were:\n  --work_alloc_propto_EVD_cost = {} ; \n'.format(args.work_alloc_propto_EVD_cost))
+    print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
+    
+    print('\nDoing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
     main(world_size, args)
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
