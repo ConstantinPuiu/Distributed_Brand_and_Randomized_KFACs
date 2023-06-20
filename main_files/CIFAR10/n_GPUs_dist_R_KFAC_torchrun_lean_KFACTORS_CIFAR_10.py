@@ -151,6 +151,7 @@ def main(world_size, args):
     net_type = args.net_type
     #########################################
     
+    ################################  SCHEDULES ######################################################################
     ### for dealing with PERIOD SCHEDULES
     if args.TInv_schedule_flag == 0: # then it's False
         TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
@@ -165,7 +166,7 @@ def main(world_size, args):
     else: # if the flag is True
         from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TCov_schedule
         if 0 in TCov_schedule.keys(): # overwrite TInv_period
-            print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
+            print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TCov_period, TCov_schedule[0]))
             TCov_period = TCov_schedule[0]
     
     #########################################
@@ -319,10 +320,10 @@ def parse_args():
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
-    parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/solver_utils/periods_schedules.py' ) 
-    parser.add_argument('--TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TCov_schedule (schedule dict for TCov) from solver/solver_utils/periods_schedules.py' ) 
+    parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/R_schedules.py' ) 
+    parser.add_argument('--TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TCov_schedule (schedule dict for TCov) from solver/schedules/R_schedules.py' ) 
     ###for dealing with other optimizer schedules
-    parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/solver_utils/periods_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
+    parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/schedules/R_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
     
     ############# END: SCHEDULE FLAGS #################################################
     

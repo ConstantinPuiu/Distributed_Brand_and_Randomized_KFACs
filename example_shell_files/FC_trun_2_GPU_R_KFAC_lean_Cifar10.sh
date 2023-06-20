@@ -26,4 +26,4 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri
 --work_alloc_propto_RSVD_cost 1 --work_eff_alloc_with_time_measurement 0 \
 --adaptable_rsvd_rank 0 --rsvd_rank_adaptation_TInv_multiplier 1 \
 --net_type 'FC' \
---TInv_schedule_flag 1 --TCov_schedule_flag 1 --KFAC_damping_schedule_flag 1
+--TInv_schedule_flag 0 --TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0
