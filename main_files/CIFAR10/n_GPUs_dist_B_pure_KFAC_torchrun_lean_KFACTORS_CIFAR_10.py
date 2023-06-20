@@ -180,7 +180,7 @@ def main(world_size, args):
     if args.TInv_schedule_flag == 0: # then it's False
         TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
     else:# if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TInv_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.B_schedules import TInv_schedule
         if 0 in TInv_schedule.keys(): # overwrite TInv_period
             print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
             TInv_period = TInv_schedule[0]
@@ -188,7 +188,7 @@ def main(world_size, args):
     if args.TCov_schedule_flag == 0: # then it's False
         TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
     else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TCov_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.B_schedules import TCov_schedule
         if 0 in TCov_schedule.keys(): # overwrite TInv_period
             print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TCov_period, TCov_schedule[0]))
             TCov_period = TCov_schedule[0]
@@ -207,7 +207,7 @@ def main(world_size, args):
     if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
         KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
     else:
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import KFAC_damping_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.B_schedules import KFAC_damping_schedule
     KFAC_damping = KFAC_damping_schedule[0]
     ### TO DO: implement the schedules properly: now only sticks at the first entryforever in all 3
     ################################ END SCHEDULES ###################################################################
