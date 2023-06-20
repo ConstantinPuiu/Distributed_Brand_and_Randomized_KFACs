@@ -29,4 +29,4 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri
 --B_truncate_before_inversion 1 \
 --adaptable_rsvd_rank 1 --rsvd_rank_adaptation_TInv_multiplier 1 \
 --adaptable_B_rank 1 --B_rank_adaptation_T_brand_updt_multiplier 1 \
---TInv_schedule_flag 1 --TCov_schedule_flag 1 --brand_update_multiplier_to_TCov_schedule_flag 1 --KFAC_damping_schedule_flag 1
+--TInv_schedule_flag 0 --TCov_schedule_flag 0 --brand_update_multiplier_to_TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0
