@@ -155,7 +155,7 @@ def main(world_size, args):
     if args.TInv_schedule_flag == 0: # then it's False
         TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
     else:# if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.R_schedules import TInv_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TInv_schedule
         if 0 in TInv_schedule.keys(): # overwrite TInv_period
             print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
             TInv_period = TInv_schedule[0]
@@ -163,7 +163,7 @@ def main(world_size, args):
     if args.TCov_schedule_flag == 0: # then it's False
         TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
     else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.R_schedules import TCov_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TCov_schedule
         if 0 in TCov_schedule.keys(): # overwrite TInv_period
             print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
             TCov_period = TCov_schedule[0]
@@ -174,7 +174,7 @@ def main(world_size, args):
     if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
         KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
     else:
-        from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.R_schedules import KFAC_damping_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import KFAC_damping_schedule
     KFAC_damping = KFAC_damping_schedule[0]
     ### TO DO: implement the schedules properly: now only sticks at the first entryforever in all 3
     ################################ END SCHEDULES ###################################################################
@@ -226,10 +226,7 @@ def main(world_size, args):
                                 rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
                                 maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
                                 rsvd_adaptive_max_history = rsvd_adaptive_max_history,
-                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
-                                # for dealing with PERIODS SCHEDULES
-                                TInv_schedule = TInv_schedule,
-                                TCov_schedule = TCov_schedule
+                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier
                                 )#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
@@ -341,6 +338,7 @@ if __name__ == '__main__':
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for R-KFAC lean\n'.format(now_start))
     print('Important args were:\n  --work_alloc_propto_RSVD_cost = {};\n  --work_eff_alloc_with_time_measurement = {};\n  --adaptable_rsvd_rank = {};\n  --rsvd_rank_adaptation_TInv_multiplier = {}\n'.format(args.work_alloc_propto_RSVD_cost, args.work_eff_alloc_with_time_measurement, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier))
+    print('Scheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
     
     print('Doing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
