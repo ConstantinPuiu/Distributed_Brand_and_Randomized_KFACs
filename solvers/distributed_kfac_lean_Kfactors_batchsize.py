@@ -380,7 +380,7 @@ class KFACOptimizer(optim.Optimizer):
                 # and the value is the list of all modules that particular worker is responsible for at Kfactor AA^T
                 # dict_of_lists_of_responsibilities_G = a dictionary where the key is the wwrker number 
                 # and the value is the list of all modules that particular worker is responsible for at Kfactor GG^T
-                new_modules_for_this_rank_A, new_modules_for_this_rank_G = allocate_EVD_inversion_work(number_of_workers = self.world_size, 
+                new_modules_for_this_rank_A, new_modules_for_this_rank_G, _ = allocate_EVD_inversion_work(number_of_workers = self.world_size, 
                                                                                     size_0_of_all_Kfactors_G = self.size_0_of_all_Kfactors_G,
                                                                                     size_0_of_all_Kfactors_A = self.size_0_of_all_Kfactors_A)
                 ### delete and initialize Q[m], d[m] and m_aa/m_gg[m] to accommodate reallocation
