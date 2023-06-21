@@ -73,8 +73,8 @@ def pred_theta_2_from_omega(total_rank):
 # then, after we recover theta based on target rank we get the cpu time based on size and theta.
 ############## end RSVD helper learnt (from measurements) quantities - for time prediciton #################################
 
-
 def predict_RSVD_comptime_from_size_and_targrank(size, total_rank):
+    #measurements on Tesla V100-SXM2
     if total_rank < 30: # make sure we fall within the 30,520 interval
         total_rank = 30
     elif total_rank > 520:
@@ -100,6 +100,7 @@ def predict_RSVD_comptime_from_size_and_targrank(size, total_rank):
 ####### Helper functions for: predicting B-updt time based on size with measurements nd more sophssticated computation ######
 #############################################################################################################################
 def predict_B_comptime_from_size_and_targrank(size, starting_rank, incoming_rank):
+    #measurements on Tesla V100-SXM2
     # only did the regression for starting rank 220 (this is also the target rank) and 256 incoming rank (also the batchsize)
     # so it's hardcoded for now as in the next 2 lines, will change in the future
     if size < starting_rank + incoming_rank: # then return the RSVD time prediciton: because that's what's it doing!
@@ -112,6 +113,26 @@ def predict_B_comptime_from_size_and_targrank(size, starting_rank, incoming_rank
 ####### END Helper functions for: predicting B-updt time based on size with measurements nd more sophssticated computation ######
 #################################################################################################################################
 
+
+
+#################################################################################################################################
+####### Helper functions for: predicting EVD time based on size with measurements nd more sophssticated computation #############
+#################################################################################################################################
+def predict_EVD_comptime_from_size_and_targrank(size):
+    # measurements on Tesla V100-SXM2
+    
+    """
+    max_size_measured_threshold = 2e04
+    if size > max_size_measured_threshold:
+        print('Warning, we are extrapolating. Only measured until max_size == {} but size to predict for was {}. The extrapolation should be pretty good though.'.format(max_size_measured_threshold, size))
+    """
+    theta_1 =  1.23393439; theta_3 =  58.67534088 # other thetas theta_0 and theta_2 were practially 0 in our measurements+regression
+    size = size/ 33000 # same factor as with all
+    return theta_1 * size + theta_3 * size**3
+#################################################################################################################################
+####### END Helper functions for: predicting EVD time based on size with measurements nd more sophssticated computation #########
+#################################################################################################################################    
+    
 def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_, 
                                                            oversampling_to_rank_, batch_size_, type_of_cost, already_alloc_time_list = None):
     #### input:
@@ -166,7 +187,7 @@ def allocate_inversion_work_same_fixed_sizes_any_cost_type(number_of_workers, si
         # the cost is m^2 r if m > r, and m^3 otherwise. 
         #To avoid large numbers, we divide by r, so m^2 and m^3/r are comapred
         if type_of_cost == 'EVD':
-            computation_time_for_G.append(size_0_of_all_Kfactors_G[key]**3)
+            computation_time_for_G.append( predict_EVD_comptime_from_size_and_targrank(size_0_of_all_Kfactors_G[key]**3) )
         elif type_of_cost == 'RSVD': # RSVD is theoretically O(m^2 n ) but on GPUs it seems to scale more like O(mn)
             total_rank_ = target_rank_ + oversampling_to_rank_
             computation_time_for_G.append(predict_RSVD_comptime_from_size_and_targrank(size_0_of_all_Kfactors_G[key], total_rank_))#**2)
