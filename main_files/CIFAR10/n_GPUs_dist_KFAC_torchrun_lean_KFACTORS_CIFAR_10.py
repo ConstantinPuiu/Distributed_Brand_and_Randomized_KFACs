@@ -15,6 +15,8 @@ import argparse
 from datetime import datetime
 from torch.utils.data.dataloader import default_collate
 
+import torchvision.models as torchVmodels
+
 import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
 #sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
@@ -121,6 +123,10 @@ def main(world_size, args):
     ### FLAG for efficient wor allocaiton  ###
     work_alloc_propto_EVD_cost = args.work_alloc_propto_EVD_cost
     
+    #### for selcting net type ##############
+    net_type = args.net_type
+    #########################################
+    
     ################################  SCHEDULES ######################################################################
     ### for dealing with PERIOD SCHEDULES
     if args.TInv_schedule_flag == 0: # then it's False
@@ -157,14 +163,32 @@ def main(world_size, args):
     train_set, testset, bsz = partition_dataset(collation_fct)
     len_train_set = len(train_set)
     print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
-
+    
+    ##################### net selection #######################################
     # instantiate the model(it's your own model) and move it to the right device
-    model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
-                    num_classes = 10,
-                    #growthRate = 12,
-                    #compressionRate = 2,
-                    widen_factor = 1).to(rank)
-
+    if net_type == 'VGG16_bn_lmxp':
+        model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
+                     num_classes = 10,
+                     #growthRate = 12,
+                     #compressionRate = 2,
+                     widen_factor = 1).to(rank)
+    elif net_type == 'FC_CIFAR10':
+        model = get_network('FC_net_for_CIFAR10', dropout = True, #depth = 19,
+                     num_classes = 10).to(rank)
+    elif net_type == 'resnet18':
+        model = torchVmodels.resnet18().to(rank)
+    elif net_type == 'resnet50':
+        model = torchVmodels.resnet50().to(rank)
+    elif net_type == 'resnet20_corrected':
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    elif net_type == 'resnet32_corrected':
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    elif net_type == 'resnet44_corrected':
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    else:
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    ##################### END: net selection ##################################
+    
     # wrap the model with DDP
     # device_ids tell DDP where the model is
     # output_device tells DDP where to output, in our case, it is rank
@@ -242,6 +266,9 @@ def parse_args():
     #### for efficient work allocaiton selection
     parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
     
+    ### for selecting net type
+    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'possible choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected' )
+    
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
     parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/KFAC_schedules.py' ) 
@@ -263,6 +290,7 @@ if __name__ == '__main__':
     print('\nStarted again, Current Time = {} \n for KFAC lean\n'.format(now_start))
     print('\nImportant args were:\n  --work_alloc_propto_EVD_cost = {} ; \n'.format(args.work_alloc_propto_EVD_cost))
     print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
+    print('\n !! net_type = {}'.format(args.net_type))
     
     print('\nDoing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size

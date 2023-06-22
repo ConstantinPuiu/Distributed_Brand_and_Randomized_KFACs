@@ -16,6 +16,8 @@ from datetime import datetime
 import datetime as dateT
 from torch.utils.data.dataloader import default_collate
 
+import torchvision.models as torchVmodels
+
 print('torch.__version__'.format(torch.__version__))
 
 import sys
@@ -232,19 +234,30 @@ def main(world_size, args):
     len_train_set = len(train_set)
     print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
     
+    ##################### net selection #######################################
     # instantiate the model(it's your own model) and move it to the right device
-    # instantiate the model(it's your own model) and move it to the right device
-    if net_type == 'Conv':
+    if net_type == 'VGG16_bn_lmxp':
         model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
-                    num_classes = 10,
-                    #growthRate = 12,
-                    #compressionRate = 2,
-                    widen_factor = 1).to(rank)
-    elif net_type == 'FC':
+                     num_classes = 10,
+                     #growthRate = 12,
+                     #compressionRate = 2,
+                     widen_factor = 1).to(rank)
+    elif net_type == 'FC_CIFAR10':
         model = get_network('FC_net_for_CIFAR10', dropout = True, #depth = 19,
-                    num_classes = 10).to(rank)
+                     num_classes = 10).to(rank)
+    elif net_type == 'resnet18':
+        model = torchVmodels.resnet18().to(rank)
+    elif net_type == 'resnet50':
+        model = torchVmodels.resnet50().to(rank)
+    elif net_type == 'resnet20_corrected':
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    elif net_type == 'resnet32_corrected':
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    elif net_type == 'resnet44_corrected':
+        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
     else:
         raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    ##################### END: net selection ##################################
 
     # wrap the model with DDP
     # device_ids tell DDP where the model is
@@ -385,6 +398,9 @@ def parse_args():
     parser.add_argument('--B_rank_adaptation_T_brand_updt_multiplier', type = int, default = 5, help = 'After B_rank_adaptation_T_brand_updt_multiplier * TCov * brand_update_multiplier_TCov steps we reconsider ranks')
     parser.add_argument('--B_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
     
+    ### for selecting net type
+    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'possible choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected' )
+    
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
     parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/BR_schedules.py' ) 
@@ -393,11 +409,9 @@ def parse_args():
     parser.add_argument('--B_R_period_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the B_R_period_schedule (schedule dict for B_R_period) from solver/schedules/BR_schedules.py . Note: B_R_period multiplies TInv to get how many iterations between an R-update to B-Layers (ie LL layers)' ) 
     ###for dealing with other optimizer schedules
     parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/schedules/BR_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
-    
+
     ############# END: SCHEDULE FLAGS #################################################
     
-    ### for selecting net type
-    parser.add_argument('--net_type', type=str, default = 'Conv', help = 'type of net: Conv (gives VGG16_bn less maxpool) or FC (gives an adhoc FC net)' )
     args = parser.parse_args()
     return args
 
@@ -410,6 +424,7 @@ if __name__ == '__main__':
     print('\nStarted again, Current Time = {} \n for B-R-KFAC lean with  B_R_period= {}, brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.B_R_period, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
     print('\nImportant args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rsvd_rank_adaptation_TInv_multiplier = {};\n --adaptable_B_rank = {}; \n --B_rank_adaptation_T_brand_updt_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier,args.adaptable_B_rank, args.B_rank_adaptation_T_brand_updt_multiplier))
     print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {},\n --brand_update_multiplier_to_TCov_schedule_flag = {}, --B_R_period_schedule_flag = {}\n--KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.brand_update_multiplier_to_TCov_schedule_flag, args.B_R_period_schedule_flag, args.KFAC_damping_schedule_flag))
+    print('\n !! net_type = {}'.format(args.net_type))
     #print('type of brand_r_target_excess is {}'.format(type(args.brand_r_target_excess)))
     print('\nDoing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size

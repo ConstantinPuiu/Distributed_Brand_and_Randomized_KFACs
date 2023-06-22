@@ -544,7 +544,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
     def _prepare_model(self):
         count = 0
         print(self.model)
-        print("=> We keep following layers in KFAC. ")
+        print("=> We keep the following layers in B-R-C-KFAC. ")
         for module in self.model.modules():
             classname = module.__class__.__name__
             # print('=> We keep following layers in KFAC. <=')

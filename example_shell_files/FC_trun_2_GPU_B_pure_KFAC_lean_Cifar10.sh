@@ -26,7 +26,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_B_pure_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epochs 10 \
 --brand_update_multiplier_to_TCov 5 \
 --work_alloc_propto_RSVD_and_B_cost 1 \
---net_type 'FC' \
+--net_type 'FC_CIFAR10' \
 --B_truncate_before_inversion 1 \
 --adaptable_rsvd_rank 1 --rsvd_rank_adaptation_TInv_multiplier 1 \
 --adaptable_B_rank 1 --B_rank_adaptation_T_brand_updt_multiplier 1 \
