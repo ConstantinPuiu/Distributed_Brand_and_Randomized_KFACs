@@ -15,7 +15,7 @@ import argparse
 from datetime import datetime
 from torch.utils.data.dataloader import default_collate
 
-import torchvision.models as torchVmodels
+print('torch.__version__ = {}'.format(torch.__version__))
 
 import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
@@ -25,6 +25,9 @@ from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_kfac_lean_Kfactors_batchsize import KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
 from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile_CIFAR_10 import get_network
+
+import torchvision.models as torchVmodels
+import Distributed_Brand_and_Randomized_KFACs.main_utils.resnet_for_CIFAR10 as resnet_for_CIFAR10
 
 
 #from torch.utils.data.distributed import DistributedSampler
@@ -179,12 +182,16 @@ def main(world_size, args):
         model = torchVmodels.resnet18().to(rank)
     elif net_type == 'resnet50':
         model = torchVmodels.resnet50().to(rank)
+    elif net_type == 'resnet101':
+        model = torchVmodels.resnet101().to(rank)
     elif net_type == 'resnet20_corrected':
-        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+        model = resnet_for_CIFAR10.resnet20().to(rank)
     elif net_type == 'resnet32_corrected':
-        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+        model = resnet_for_CIFAR10.resnet32().to(rank)
     elif net_type == 'resnet44_corrected':
-        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+        model = resnet_for_CIFAR10.resnet44().to(rank)
+    elif net_type == 'resnet56_corrected':
+        model = resnet_for_CIFAR10.resnet56().to(rank)        
     else:
         raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
     ##################### END: net selection ##################################
