@@ -25,11 +25,8 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_dataloader
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_R_kfac_lean_Kfactors_batchsize import R_KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
-from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile_CIFAR_10 import get_network
 
-import torchvision.models as torchVmodels
-import Distributed_Brand_and_Randomized_KFACs.main_utils.resnet_for_CIFAR10 as resnet_for_CIFAR10
-
+from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
 
 #from torch.utils.data.distributed import DistributedSampler
 """def prepare(rank, world_size, batch_size=128, pin_memory=False, num_workers=0):
@@ -197,32 +194,7 @@ def main(world_size, args):
     print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
 
     ##################### net selection #######################################
-    # instantiate the model(it's your own model) and move it to the right device
-    if net_type == 'VGG16_bn_lmxp':
-        model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
-                     num_classes = 10,
-                     #growthRate = 12,
-                     #compressionRate = 2,
-                     widen_factor = 1).to(rank)
-    elif net_type == 'FC_CIFAR10':
-        model = get_network('FC_net_for_CIFAR10', dropout = True, #depth = 19,
-                     num_classes = 10).to(rank)
-    elif net_type == 'resnet18':
-        model = torchVmodels.resnet18().to(rank)
-    elif net_type == 'resnet50':
-        model = torchVmodels.resnet50().to(rank)
-    elif net_type == 'resnet101':
-        model = torchVmodels.resnet101().to(rank)
-    elif net_type == 'resnet20_corrected':
-        model = resnet_for_CIFAR10.resnet20().to(rank)
-    elif net_type == 'resnet32_corrected':
-        model = resnet_for_CIFAR10.resnet32().to(rank)
-    elif net_type == 'resnet44_corrected':
-        model = resnet_for_CIFAR10.resnet44().to(rank)
-    elif net_type == 'resnet56_corrected':
-        model = resnet_for_CIFAR10.resnet56().to(rank)        
-    else:
-        raise ValueError('Net of type: net_type = {} Not implemented'.format(net_type) )
+    model = get_net_main_util_fct(net_type, rank, num_classes = 10)
     ##################### END: net selection ##################################
         
     # wrap the model with DDP
