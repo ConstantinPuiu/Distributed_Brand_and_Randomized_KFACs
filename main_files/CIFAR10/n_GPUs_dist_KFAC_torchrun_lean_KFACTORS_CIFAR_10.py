@@ -77,12 +77,16 @@ class DataPartitioner(object):
 
 ''' use as'''
 """ Partitioning dataset """
-def partition_dataset(collation_fct, data_root_path):
+def partition_dataset(collation_fct, data_root_path, dataset):
     size = dist.get_world_size()
     bsz = 256 #int(128 / float(size))
-    trainset, testset = get_dataloader(dataset = 'cifar10', train_batch_size = bsz,
+    if dataset in ['cifar10', 'cifar100', 'imagenet']:
+        trainset, testset = get_dataloader(dataset = dataset, train_batch_size = bsz,
                                           test_batch_size = bsz,
                                           collation_fct = collation_fct, root = data_root_path)
+    else:
+        raise NotImplementedError('dataset = {} is not implemeted'.format(dataset))
+        
     partition_sizes = [1.0 / size for _ in range(size)]
     partition = DataPartitioner(trainset, partition_sizes)
     partition = partition.use(dist.get_rank())
@@ -94,7 +98,6 @@ def partition_dataset(collation_fct, data_root_path):
     """testset is preprocessed but NOT split over GPUS and currently NOT EVER USED (only blind training is performed).
     TODO: implement testset stuff and have a TEST at the end of epoch and at the end of training!"""
     return train_set, testset, bsz
-    
 
 def cleanup():
     dist.destroy_process_group()
@@ -127,9 +130,14 @@ def main(world_size, args):
     net_type = args.net_type
     #########################################
     
-    ##### for data root path ###########
+    ##### for data root path and dataset type ###########
     data_root_path = args.data_root_path
-    ##### END: for data root path ######
+    dataset = args.dataset
+    
+    if dataset == 'imagenet': # for imagenet, if we selected the corrected version of VGG (1hich is only for CIFAR10, ignore the corrected part)
+        if '_corrected' in net_type and 'resnet' in net_type:
+            net_type = net_type.replace('_corrected', '')
+    ##### END: for data root path #######################
     
     ################################  SCHEDULES ######################################################################
     ### for dealing with PERIOD SCHEDULES
@@ -164,7 +172,7 @@ def main(world_size, args):
     def collation_fct(x):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
 
-    train_set, testset, bsz = partition_dataset(collation_fct, data_root_path)
+    train_set, testset, bsz = partition_dataset(collation_fct, data_root_path, dataset)
     len_train_set = len(train_set)
     print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
     
@@ -250,10 +258,11 @@ def parse_args():
     parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
     
     ### for selecting net type
-    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'possible choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected' )
+    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'Possible Choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected' )
     
-    ### for dealing with data path (where the dlded dataset is stored)
+    ### for dealing with data path (where the dlded dataset is stored) and dataset itself
     parser.add_argument('--data_root_path', type=str, default = '/data/math-opt-ml/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
+    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
@@ -276,7 +285,7 @@ if __name__ == '__main__':
     print('\nStarted again, Current Time = {} \n for KFAC lean\n'.format(now_start))
     print('\nImportant args were:\n  --work_alloc_propto_EVD_cost = {} ; \n'.format(args.work_alloc_propto_EVD_cost))
     print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
-    print('\n !! net_type = {}'.format(args.net_type))
+    print('\n !! net_type = {}, dataset = {}'.format(args.net_type, args.dataset))
     
     print('\nDoing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size

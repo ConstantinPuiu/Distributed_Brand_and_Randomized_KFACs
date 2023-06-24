@@ -50,15 +50,20 @@ def get_transforms(dataset):
 def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = None, root='./data'):
     transform_train, transform_test = get_transforms(dataset)
     trainset, testset = None, None
+    # adapt root folder based on chosen dataset
+    root = root + '/' + dataset + 'data/'
+    # get dataset
     if dataset == 'cifar10':
         trainset = torchvision.datasets.CIFAR10(root=root, train=True, download=True, transform=transform_train)
         testset = torchvision.datasets.CIFAR10(root=root, train=False, download=True, transform=transform_test)
-
-    if dataset == 'cifar100':
+    elif dataset == 'cifar100':
         trainset = torchvision.datasets.CIFAR100(root=root, train=True, download=True, transform=transform_train)
         testset = torchvision.datasets.CIFAR100(root=root, train=False, download=True, transform=transform_test)
-
-    if dataset == 'imagenette':
+    elif dataset == 'imagenet':
+        trainset = torchvision.datasets.ImageNet(root=root, train=True, download=True, transform=transform_train)
+        testset = torchvision.datasets.ImageNet(root=root, train=False, download=True, transform=transform_test)
+    
+    """if dataset == 'imagenette':
         # data_dir = '/content/gdrive/My Drive/datasets/imagenette/imagenette2' (root should be this)
         
         trainset = ImageFolder(root + '/train', transform = transform_train) #torchvision.datasets.ImageNet(root + '/train', transform = transform_train) # 
@@ -66,7 +71,7 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
         
         #train_features = torch.load(featpath)
         #train_labels   =  torch.load(labpath)
-        #trainset = torch.utils.data.TensorDataset(train_features, train_labels)
+        #trainset = torch.utils.data.TensorDataset(train_features, train_labels)"""
 
     assert trainset is not None and testset is not None, 'Error, no dataset %s' % dataset
 
