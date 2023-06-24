@@ -24,6 +24,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 #NCCL_BLOCKING_WAIT=1
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 2 --n_epochs 10 \
 --net_type 'resnet18' \
+--data_root_path '/data/math-opt-ml/' \
 --brand_update_multiplier_to_TCov 1 \
 --B_R_period 5 \
 --B_truncate_before_inversion 1 \

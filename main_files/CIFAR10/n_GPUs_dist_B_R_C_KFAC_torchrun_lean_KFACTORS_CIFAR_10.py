@@ -78,13 +78,13 @@ class DataPartitioner(object):
         return Partition(self.data, self.partitions[partition])
 
 ''' use as'''
-""" Partitioning MNIST """
-def partition_dataset(collation_fct):
+""" Partitioning dataset """
+def partition_dataset(collation_fct, data_root_path):
     size = dist.get_world_size()
     bsz = 256 #int(128 / float(size))
     trainset, testset = get_dataloader(dataset = 'cifar10', train_batch_size = bsz,
                                           test_batch_size = bsz,
-                                          collation_fct = collation_fct, root='./data_CIFAR10')
+                                          collation_fct = collation_fct, root = data_root_path)
     partition_sizes = [1.0 / size for _ in range(size)]
     partition = DataPartitioner(trainset, partition_sizes)
     partition = partition.use(dist.get_rank())
@@ -180,7 +180,11 @@ def main(world_size, args):
     correction_multiplier_TCov = args.correction_multiplier_TCov
     brand_corection_dim_frac = args.brand_corection_dim_frac
     ### END: for dealing with the correction (the C in B-R-C) ###########################
-        
+    
+    ##### for data root path ###########
+    data_root_path = args.data_root_path
+    ##### END: for data root path ######
+    
     ################################  SCHEDULES ######################################################################
     ### for dealing with PERIOD SCHEDULES
     if args.TInv_schedule_flag == 0: # then it's False
@@ -239,7 +243,7 @@ def main(world_size, args):
     def collation_fct(x):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
 
-    train_set, testset, bsz = partition_dataset(collation_fct)
+    train_set, testset, bsz = partition_dataset(collation_fct, data_root_path)
     len_train_set = len(train_set)
     print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
     
@@ -400,6 +404,9 @@ def parse_args():
     
     ### for selecting net type
     parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'possible choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected' )
+    
+    ### for dealing with data path (where the dlded dataset is stored)
+    parser.add_argument('--data_root_path', type=str, default = '/data/math-opt-ml/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES

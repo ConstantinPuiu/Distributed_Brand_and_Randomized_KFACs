@@ -24,6 +24,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 #NCCL_LL_THRESHOLD=0
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 4 --n_epoch 12 \
 --net_type 'resnet18' \
+--data_root_path '/data/math-opt-ml/' \
 --work_alloc_propto_EVD_cost 1 \
 --TInv_schedule_flag 0 --TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0
 
