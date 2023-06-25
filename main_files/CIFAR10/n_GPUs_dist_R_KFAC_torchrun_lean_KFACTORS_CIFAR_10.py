@@ -78,12 +78,12 @@ class DataPartitioner(object):
 
 ''' use as'''
 """ Partitioning dataset """
-def partition_dataset(collation_fct, data_root_path, dataset):
+def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
     size = dist.get_world_size()
-    bsz = 256 #int(128 / float(size))
+    #bsz = 256 #int(128 / float(size))
     if dataset in ['cifar10', 'cifar100', 'imagenet']:
-        trainset, testset = get_dataloader(dataset = dataset, train_batch_size = bsz,
-                                          test_batch_size = bsz,
+        trainset, testset = get_dataloader(dataset = dataset, train_batch_size = batch_size,
+                                          test_batch_size = batch_size,
                                           collation_fct = collation_fct, root = data_root_path)
     else:
         raise NotImplementedError('dataset = {} is not implemeted'.format(dataset))
@@ -92,13 +92,13 @@ def partition_dataset(collation_fct, data_root_path, dataset):
     partition = DataPartitioner(trainset, partition_sizes)
     partition = partition.use(dist.get_rank())
     train_set = torch.utils.data.DataLoader(partition,
-                                         batch_size=bsz,
+                                         batch_size=batch_size,
                                          collate_fn = collation_fct,
                                          shuffle=True)
     
     """testset is preprocessed but NOT split over GPUS and currently NOT EVER USED (only blind training is performed).
     TODO: implement testset stuff and have a TEST at the end of epoch and at the end of training!"""
-    return train_set, testset, bsz
+    return train_set, testset, batch_size
 
 def cleanup():
     dist.destroy_process_group()
@@ -117,6 +117,7 @@ def main(world_size, args):
     stat_decay = args.stat_decay #0.95
     momentum = args.momentum
     WD = args.WD #0.000007 #1 ########  7e-4 got 9.00 +% acc conistently. 7e-06 worked fine too!
+    batch_size = args.batch_size
     ### RSVD specific params or stuff that 1st appeared in rsvd(clip and damping type)
     rsvd_rank = args.rsvd_rank
     rsvd_oversampling_parameter = args.rsvd_oversampling_parameter
@@ -201,7 +202,7 @@ def main(world_size, args):
     def collation_fct(x):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
 
-    train_set, testset, bsz = partition_dataset(collation_fct, data_root_path, dataset)
+    train_set, testset, bsz = partition_dataset(collation_fct, data_root_path, dataset, batch_size)
     len_train_set = len(train_set)
     print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
 
@@ -293,6 +294,7 @@ def parse_args():
     parser.add_argument('--stat_decay', type=int, default=0.95, help='the rho' )
     parser.add_argument('--momentum', type=int, default=0.0, help='momentum' )
     parser.add_argument('--WD', type=int, default=7e-4, help='Weight decay' )
+    parser.add_argument('--batch_size', type = int, default = 256, help = 'Batch size for 1 GPU (total BS for grad is n_gpu x *this). Total BS for K-factors is just *this! (for lean-ness)')
     
     ### RSVD specific params or stuff that 1st appeared in rsvd(clip and damping type)
     parser.add_argument('--rsvd_rank', type=int, default = 220, help = 'The target rank of RSVD' )
