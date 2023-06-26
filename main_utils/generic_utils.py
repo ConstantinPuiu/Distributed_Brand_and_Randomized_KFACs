@@ -1,14 +1,16 @@
 from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile_CIFAR_10 import get_network
 import torchvision.models as torchVmodels
 import Distributed_Brand_and_Randomized_KFACs.main_utils.resnet_for_CIFAR10 as resnet_for_CIFAR10
+from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile import Net as simple_MNIST_net
 
 # instantiate the model(it's your own model) and move it to the right device
 def get_net_main_util_fct(net_type, rank, num_classes = 10):
     if '_corrected' in net_type:
         print('Using corrected resnet is only for CIFAR10, and your num_classes was {} != 10. Please use (standard) resne with this dataset'.format(num_classes))
         # strictly speaking, could make resnet_corrected work witha ny num_classes by setting model.linear to an C with the desired number of classes. We don't do that as we can just use standard resnets
-    
-    if net_type == 'VGG16_bn_lmxp':
+    if net_type == 'Simple_net_for_MNIST':
+        model = simple_MNIST_net().to(rank)
+    elif net_type == 'VGG16_bn_lmxp':
         model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
                      num_classes = num_classes,
                      #growthRate = 12,

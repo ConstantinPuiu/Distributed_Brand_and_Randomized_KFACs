@@ -21,7 +21,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 #optDLvenv
 
 #mpiexec python ./attempt_4_GPUs_naive_KFAC.py
-OMP_NUM_THREADS=8 NCCL_LL_THRESHOLD=0 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_CIFAR_10.py --world_size 4 --n_epoch 20 --batch_size 256 \
+OMP_NUM_THREADS=8 NCCL_LL_THRESHOLD=0 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 4 --n_epoch 20 --batch_size 256 \
 --net_type 'resnet18' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'cifar10' \

@@ -6,7 +6,17 @@ from torchvision.datasets import ImageFolder
 def get_transforms(dataset):
     transform_train = None
     transform_test = None
-    if dataset == 'cifar10':
+    if dataset == 'MNIST':
+        transform_train = transforms.Compose([
+                                 transforms.ToTensor(),
+                                 transforms.Normalize((0.1307,), (0.3081,))
+                             ])
+        transform_test = transforms.Compose([
+                                 transforms.ToTensor(),
+                                 transforms.Normalize((0.1307,), (0.3081,))
+                             ])
+        
+    elif dataset == 'cifar10':
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -71,7 +81,10 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
     # adapt root folder based on chosen dataset
     root = root + '/' + dataset + '_data/'
     # get dataset
-    if dataset == 'cifar10':
+    if dataset == 'MNIST':
+        trainset = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=transform_train)
+        testset = torchvision.datasets.MNIST(root=root, train=False, download=True, transform=transform_test)
+    elif dataset == 'cifar10':
         trainset = torchvision.datasets.CIFAR10(root=root, train=True, download=True, transform=transform_train)
         testset = torchvision.datasets.CIFAR10(root=root, train=False, download=True, transform=transform_test)
     elif dataset == 'cifar100':

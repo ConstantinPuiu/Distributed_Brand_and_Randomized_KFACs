@@ -22,8 +22,9 @@ import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
 #sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
 
+#from true_kfac_FC_project_adaptive_damping import KFACOptimizer #distributed_kfac_simplest_form
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_dataloader
-from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_R_kfac_lean_Kfactors_batchsize import R_KFACOptimizer
+from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_B_R_kfac_lean_Kfactors_batchsize import B_R_KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
@@ -81,7 +82,7 @@ class DataPartitioner(object):
 def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
-    if dataset in ['cifar10', 'cifar100', 'imagenet']:
+    if dataset in ['MNIST', 'cifar10', 'cifar100', 'imagenet']:
         trainset, testset, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
                                           test_batch_size = batch_size,
                                           collation_fct = collation_fct, root = data_root_path)
@@ -99,6 +100,7 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
     """testset is preprocessed but NOT split over GPUS and currently NOT EVER USED (only blind training is performed).
     TODO: implement testset stuff and have a TEST at the end of epoch and at the end of training!"""
     return train_set, testset, batch_size, num_classes
+    
 
 def cleanup():
     dist.destroy_process_group()
@@ -108,7 +110,9 @@ def cleanup():
 def main(world_size, args):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    dist.init_process_group("nccl", timeout = dateT.timedelta(seconds = 120))#, world_size=world_size)
+    #os.environ['NCCL_BLOCKING_WAIT'] = '1'
+    #os.environ['NCCL_LL_THRESHOLD'] = '0'
+    dist.init_process_group(backend = "nccl", timeout = dateT.timedelta(seconds = 120))#, world_size=world_size)
     rank = dist.get_rank()
     print('Hello from GPU rank {} with pytorch DDP\n'.format(rank))
     
@@ -125,23 +129,18 @@ def main(world_size, args):
     damping_type = args.damping_type #'adaptive',
     clip_type = args.clip_type
     
-    
     ###others only added after starting CIFAR10
     n_epochs = args.n_epochs
     TCov_period = args.TCov_period
     TInv_period = args.TInv_period
     
-    ##### work allocation
-    if args.work_alloc_propto_RSVD_cost == 0 :
-        work_alloc_propto_RSVD_cost = False
-    else:
-        work_alloc_propto_RSVD_cost = True
+    ######### BRAND K-fac (also BRSKFAC) specific parameters
+    B_R_period = args.B_R_period
+    brand_r_target_excess = args.brand_r_target_excess
+    brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
+    # ====================================================
     
-    if args.work_eff_alloc_with_time_measurement == 0:
-        work_eff_alloc_with_time_measurement = False
-    else:
-        work_eff_alloc_with_time_measurement = True
-        
+    
     ### rsvd adaptive rank ##########
     if args.adaptable_rsvd_rank == 0:
         adaptable_rsvd_rank = False
@@ -153,10 +152,35 @@ def main(world_size, args):
     rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
     # ====================================================
     
+    ### B adaptive rank ##########
+    if args.adaptable_B_rank == 0:
+        adaptable_B_rank = False
+    else:
+        adaptable_B_rank = True
+    B_rank_adaptation_T_brand_updt_multiplier = args.B_rank_adaptation_T_brand_updt_multiplier
+    B_target_truncation_rel_err = args.B_target_truncation_rel_err
+    maximum_ever_admissible_B_rank = args.maximum_ever_admissible_B_rank    
+    B_adaptive_max_history = args.B_adaptive_max_history
+    # ===================================================
+    
     #### for selcting net type ##############
     net_type = args.net_type
     #########################################
     
+    ### added for efficient work allocation
+    if args.work_alloc_propto_RSVD_and_B_cost == 0:
+        work_alloc_propto_RSVD_and_B_cost = False
+    else:
+        work_alloc_propto_RSVD_and_B_cost = True
+    # ====================================================
+        
+    ######## added to control whether we B-truncate before or after inversion ###########
+    if args.B_truncate_before_inversion == 0:
+        B_truncate_before_inversion = False
+    else:
+        B_truncate_before_inversion = True
+    ######## END: added to control whether we B-truncate before or after inversion ######
+        
     ##### for data root path and dataset type ###########
     data_root_path = args.data_root_path
     dataset = args.dataset
@@ -164,6 +188,16 @@ def main(world_size, args):
     if dataset == 'imagenet': # for imagenet, if we selected the corrected version of VGG (1hich is only for CIFAR10, ignore the corrected part)
         if '_corrected' in net_type and 'resnet' in net_type:
             net_type = net_type.replace('_corrected', '')
+    
+    if dataset == 'MNIST':
+        # make sure we did not select a net which cna't run with MNIST< namely anything apart form the simple MNIST net
+        if net_type != 'Simple_net_for_MNIST':
+            print('rank:{}. Because dataset == MNIST we can only use the Simple_net_for_MNIST net, so overwriting given parameter as such'.format(rank))
+        net_type = 'Simple_net_for_MNIST'
+    else:
+        if net_type == 'Simple_net_for_MNIST':
+            print('net_type = Simple_net_for_MNIST is only possible when dataset = MNIST. Changing to default net: VGG16_bn_lmxp')
+            net_type = 'VGG16_bn_lmxp'
     ##### END: for data root path #######################
     
     ################################  SCHEDULES ######################################################################
@@ -171,7 +205,7 @@ def main(world_size, args):
     if args.TInv_schedule_flag == 0: # then it's False
         TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
     else:# if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TInv_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import TInv_schedule
         if 0 in TInv_schedule.keys(): # overwrite TInv_period
             print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
             TInv_period = TInv_schedule[0]
@@ -179,10 +213,26 @@ def main(world_size, args):
     if args.TCov_schedule_flag == 0: # then it's False
         TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
     else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TCov_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import TCov_schedule
         if 0 in TCov_schedule.keys(): # overwrite TInv_period
             print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TCov_period, TCov_schedule[0]))
             TCov_period = TCov_schedule[0]
+    
+    if args.brand_update_multiplier_to_TCov_schedule_flag == 0: # then it's False
+        brand_update_multiplier_to_TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+    else: # if the flag is True
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import brand_update_multiplier_to_TCov_schedule
+        if 0 in brand_update_multiplier_to_TCov_schedule.keys(): # overwrite TInv_period
+            print('Because --brand_update_multiplier_to_TCov_schedule_flag was set to non-zero (True) and brand_update_multiplier_to_TCov_schedule[0] exists, we overwrite brand_update_multiplier_to_TCov = {} (as passed in --brand_update_multiplier_to_TCov) to brand_update_multiplier_to_TCov_schedule[0] = {}'.format(brand_update_multiplier_to_TCov, brand_update_multiplier_to_TCov_schedule[0]))
+            brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov_schedule[0]
+    
+    if args.B_R_period_schedule_flag == 0: # then it's False
+        B_R_period_schedule = {} # empty dictionary - no scheduling "enforcement"
+    else: # if the flag is True
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import B_R_period_schedule
+        if 0 in B_R_period_schedule.keys(): # overwrite TInv_period
+            print('Because --B_R_period_schedule_flag was set to non-zero (True) and B_R_period_schedule[0] exists, we overwrite B_R_period = {} (as passed in --B_R_period) to B_R_period_schedule[0] = {}'.format(B_R_period, B_R_period_schedule[0]))
+            B_R_period = B_R_period_schedule[0]
     
     #########################################
             
@@ -190,23 +240,23 @@ def main(world_size, args):
     if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
         KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
     else:
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import KFAC_damping_schedule
+        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import KFAC_damping_schedule
     KFAC_damping = KFAC_damping_schedule[0]
     ### TO DO: implement the schedules properly: now only sticks at the first entryforever in all 3
     ################################ END SCHEDULES ###################################################################
     
-    # ====================================================
-        
+    # ====================================================###############################
+    
     ####
     
     def collation_fct(x):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
-    
+
     print('GPU-rank {} : Partitioning dataset ...'.format(rank))
     train_set, testset, bsz, num_classes = partition_dataset(collation_fct, data_root_path, dataset, batch_size)
     len_train_set = len(train_set)
     print('GPU-rank {} : Done partitioning dataset!  : len(train_set) = {}'.format(rank, len_train_set))
-
+    
     ##################### net selection #######################################
     print('GPU-rank {} : Setting up model (neural netowrk)...'.format(rank))
     model = get_net_main_util_fct(net_type, rank, num_classes = num_classes)
@@ -219,9 +269,9 @@ def main(world_size, args):
     model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters = False)
     print('GPU-rank {} : Done setting up model (neural netowrk)!'.format(rank))
     #################### The above is defined previously
-    
+
     print('GPU-rank {} : Initializing optimizer...'.format(rank))
-    optimizer =  R_KFACOptimizer(model, rank = rank, world_size = world_size, 
+    optimizer =  B_R_KFACOptimizer(model, rank = rank, world_size = world_size, 
                                lr_function = l_rate_function, momentum = momentum, stat_decay = stat_decay, 
                                 kl_clip = kfac_clip, damping = KFAC_damping, 
                                 weight_decay = WD, TCov = TCov_period,
@@ -229,15 +279,27 @@ def main(world_size, args):
                                 rsvd_rank = rsvd_rank,
                                 rsvd_oversampling_parameter = rsvd_oversampling_parameter,
                                 rsvd_niter = rsvd_niter,
-                                work_alloc_propto_RSVD_cost = work_alloc_propto_RSVD_cost,
-                                work_eff_alloc_with_time_measurement = work_eff_alloc_with_time_measurement,
                                 damping_type = damping_type, #'adaptive',
                                 clip_type = clip_type,
+                                B_R_period = B_R_period, 
+                                brand_r_target_excess = brand_r_target_excess,
+                                brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
+                                #added to dea with truncation before inversion
+                                B_truncate_before_inversion = B_truncate_before_inversion,
+                                # added to deal with eff work alloc
+                                work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost,
+                                # for dealing with adaptable rsvd rank
                                 adaptable_rsvd_rank = adaptable_rsvd_rank,
                                 rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
                                 maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
                                 rsvd_adaptive_max_history = rsvd_adaptive_max_history,
-                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier
+                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
+                                # for dealing with adaptable B rank
+                                adaptable_B_rank = adaptable_B_rank,
+                                B_rank_adaptation_T_brand_updt_multiplier = B_rank_adaptation_T_brand_updt_multiplier,
+                                B_target_truncation_rel_err = B_target_truncation_rel_err,
+                                maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank,    
+                                B_adaptive_max_history = B_adaptive_max_history
                                 )#    optim.SGD(model.parameters(),
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
@@ -254,6 +316,11 @@ def main(world_size, args):
             optimizer.TCov =  TCov_schedule[epoch]
         if epoch in TInv_schedule:
             optimizer.TInv = TInv_schedule[epoch]
+        if epoch in brand_update_multiplier_to_TCov_schedule:
+            optimizer.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov_schedule[epoch]
+            optimizer.T_brand_updt = optimizer.TCov * optimizer.brand_update_multiplier_to_TCov # this line is crucial, as we use optimizer.T_brand_updt most of the times!
+        if epoch in B_R_period_schedule:
+            optimizer.B_R_period = B_R_period_schedule[epoch]
         if epoch in KFAC_damping_schedule: 
             optimizer.param_groups[0]['damping'] = KFAC_damping_schedule[epoch]
         ######### END: setting parameters according to SCHEDULES ##############
@@ -275,12 +342,9 @@ def main(world_size, args):
                 print('\ntype(pred) = {}, pred = {}, pred.get_device() = {}\n'.format(type(pred), pred, pred.get_device()))
                 print('\ntype(y) = {}, y = {}, y.get_device() = {}\n'.format(type(y),y, y.get_device()))
                 loss = loss_fn(pred, y)
-            ## debug negative loss only
-            #if y not in [0,1,2,3,4,5,6,7,8,9]: # checing for data being corrupted? (it wasn't this it was forgetting the softmax)
-            #    print('rank = {} has encountered WEIRD label yi = {}'.format(y))
             
             #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
-
+                
             loss.backward()
             if jdx == len_train_set - 1 and epoch == n_epochs - 1:
                 tend = time.time()
@@ -305,7 +369,7 @@ def parse_args():
     parser.add_argument('--rsvd_rank', type=int, default = 220, help = 'The target rank of RSVD' )
     parser.add_argument('--rsvd_oversampling_parameter', type=int, default = 10, help = 'the oversampling parameter of RSVD' )
     parser.add_argument('--rsvd_niter', type=int, default = 3, help = '# of power(like) iterations in getting projection subspace for RSVD' )
-    parser.add_argument('--damping_type', type=str, default= 'adaptive', help = 'type of damping' )
+    parser.add_argument('--damping_type', type=str, default = 'adaptive', help = 'type of damping' )
     parser.add_argument('--clip_type', type=str, default = 'non_standard', help = 'Weight decay' )
     #### TO DO: CODE the RSVD to be adaptive, and adaptivity specific to each K-factor
     #### TO DO cond't: preserve the current functionality and add a rsvd_rank_type switch with "adaptive" vs standard 
@@ -313,37 +377,53 @@ def parse_args():
     ### Others added only once moved to CIFAR10
     parser.add_argument('--n_epochs', type=int, default=10, help='Number_of_epochs' )
     parser.add_argument('--TCov_period', type=int, default=20, help='Period of reupdating Kfactors (not inverses) ' )
-    parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTATIONS' )
+    parser.add_argument('--TInv_period', type=int, default=100, help='Period of reupdating K-factor INVERSE REPREZENTAITONS' )
+    
+    ######### BRAND K-fac (also BRSKFAC) specific parameters
+    parser.add_argument('--B_R_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period). (Multiplies TInv).' )
+    parser.add_argument('--brand_r_target_excess', type=int, default=0, help='How many more modes to keep in the B-(.) than in the R-(.) reprezentation' )
+    parser.add_argument('--brand_update_multiplier_to_TCov', type=int, default=1, help='The factor by which the B-update frequency is LOWER than the frequency at which we reiceve new K-factor information' )
+    # ====================================================
     
     ### added to deal with more efficient work allocaiton
     #
-    parser.add_argument('--work_alloc_propto_RSVD_cost', type=int, default=1, help='Do we want to allocate work in proportion to FORECASTED (based on theoretical complexity) RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly' ) 
-    parser.add_argument('--work_eff_alloc_with_time_measurement', type=int, default=0, help='Do we want to allocate work in proportion to MEASURED (somewhat noisy) RSVD cost? set to any non-zero integer if yes. Uing integers as parsing bools with argparse is done wrongly. Setting this to 1 (TRUE) has no effect if work_alloc_propto_RSVD_cost == False' ) 
+    parser.add_argument('--work_alloc_propto_RSVD_and_B_cost', type=int, default=1, help='Do we want to allocate work in proportion to actual RSVD cost, and actual B-update Cost? set to any nonzero if yes. we use int rather than bool as argparse works badly with bool!' ) 
     
-    #### added to dal with RSVD adaptable rank
-    parser.add_argument('--adaptable_rsvd_rank', type=int, default = 0, help='Set to any non-zero integer if we want adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
+    #### added to allow for B-truncating just before inversion as well
+    parser.add_argument('--B_truncate_before_inversion', type=int, default=0, help='Do we want to B-truncate just before inversion (more speed less accuracy) If so set to 1 (or anything other than 0). Standard way to deal with bools wiht buggy argparser that only work correctly wiht numbers!' ) 
+    
+    #### added to deal with RSVD adaptable rank
+    parser.add_argument('--adaptable_rsvd_rank', type=int, default = 0, help='Set to any non-zero integer if we want R- adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
     parser.add_argument('--rsvd_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in rsvd: the ran will adapt to be around this error (but rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank)' ) 
     parser.add_argument('--maximum_ever_admissible_rsvd_rank', type=int, default=700, help='Rsvd rank has to be strictly below maximum_ever_admissible_rsvd_rank' ) 
     parser.add_argument('--rsvd_rank_adaptation_TInv_multiplier', type = int, default = 5, help = 'After rsvd_rank_adaptation_TInv_multiplier * TInv steps we reconsider ranks')
     parser.add_argument('--rsvd_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
     
+    #### added to deal with B- adaptable rank
+    parser.add_argument('--adaptable_B_rank', type=int, default = 0, help='Set to any non-zero integer if we want B- adaptable rank. Uing integers as parsing bools with argparse is done wrongly' ) 
+    parser.add_argument('--B_target_truncation_rel_err', type=float, default=0.033, help='target truncation error in B-update_truncation: the rank will adapt to be around this error (but B-truncation rank has to be strictly below maximum_ever_admissible_B_rank and above 70. Unlike rsvd it is not above 10. That is because using B with very small truncation rank effectively means we carry no information from before, in which case B is pointless. If you need smaller minimum admissible value than 70, edit the corresponding function in the file adaptive_rank_utils.py)' ) 
+    parser.add_argument('--maximum_ever_admissible_B_rank', type=int, default=500, help='B-truncation rank has to be strictly below maximum_ever_admissible_B_rank' ) 
+    parser.add_argument('--B_rank_adaptation_T_brand_updt_multiplier', type = int, default = 5, help = 'After B_rank_adaptation_T_brand_updt_multiplier * TCov * brand_update_multiplier_TCov steps we reconsider ranks')
+    parser.add_argument('--B_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
+    
     ### for selecting net type
-    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'Possible Choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected' )
+    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'Possible Choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected. Simple_net_for_MNIST is also possible and works only for MNIST: changed to VGG16_bn_lmxp if dataset is other than MNIST and the -for_MNIST net is selected' )
     
     ### for dealing with data path (where the dlded dataset is stored) and dataset itself
     parser.add_argument('--data_root_path', type=str, default = '/data/math-opt-ml/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
-    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
+    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: MNIST, cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
-    parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/R_schedules.py' ) 
-    parser.add_argument('--TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TCov_schedule (schedule dict for TCov) from solver/schedules/R_schedules.py' ) 
+    parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/BR_schedules.py' ) 
+    parser.add_argument('--TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TCov_schedule (schedule dict for TCov) from solver/schedules/BR_schedules.py' ) 
+    parser.add_argument('--brand_update_multiplier_to_TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the brand_update_multiplier_to_TCov (schedule dict for brand_update_multiplier_to_TCov) from solver/schedules/BR_schedules.py' ) 
+    parser.add_argument('--B_R_period_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the B_R_period_schedule (schedule dict for B_R_period) from solver/schedules/BR_schedules.py . Note: B_R_period multiplies TInv to get how many iterations between an R-update to B-Layers (ie LL layers)' ) 
     ###for dealing with other optimizer schedules
-    parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/schedules/R_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
-    
+    parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/schedules/BR_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
+
     ############# END: SCHEDULE FLAGS #################################################
     
-    # parse args
     args = parser.parse_args()
     return args
 
@@ -353,18 +433,17 @@ if __name__ == '__main__':
     now_start = datetime.now()
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
-    print('\nStarted again, Current Time = {} \n for R-KFAC lean\n'.format(now_start))
-    print('\nImportant args were:\n  --work_alloc_propto_RSVD_cost = {};\n  --work_eff_alloc_with_time_measurement = {};\n  --adaptable_rsvd_rank = {};\n  --rsvd_rank_adaptation_TInv_multiplier = {}\n'.format(args.work_alloc_propto_RSVD_cost, args.work_eff_alloc_with_time_measurement, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier))
-    print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
+    print('\nStarted again, Current Time = {} \n for B-R-KFAC lean with  B_R_period= {}, brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.B_R_period, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
+    print('\nImportant args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rsvd_rank_adaptation_TInv_multiplier = {};\n --adaptable_B_rank = {}; \n --B_rank_adaptation_T_brand_updt_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier,args.adaptable_B_rank, args.B_rank_adaptation_T_brand_updt_multiplier))
+    print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {},\n --brand_update_multiplier_to_TCov_schedule_flag = {}, --B_R_period_schedule_flag = {}\n--KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.brand_update_multiplier_to_TCov_schedule_flag, args.B_R_period_schedule_flag, args.KFAC_damping_schedule_flag))
     print('\n !! net_type = {}, dataset = {}'.format(args.net_type, args.dataset))
-    
+    #print('type of brand_r_target_excess is {}'.format(type(args.brand_r_target_excess)))
     print('\nDoing << {} >> epochs'.format(args.n_epochs))
     world_size = args.world_size
     main(world_size, args)
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nFINISHED AT: = {} \n\n'.format(datetime.now()))
     print('\nFINISHED AT: = {} \n\n'.format(datetime.now()))
-
 
 
 

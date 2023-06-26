@@ -82,7 +82,7 @@ class DataPartitioner(object):
 def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
-    if dataset in ['cifar10', 'cifar100', 'imagenet']:
+    if dataset in ['MNIST', 'cifar10', 'cifar100', 'imagenet']:
         trainset, testset, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
                                           test_batch_size = batch_size,
                                           collation_fct = collation_fct, root = data_root_path)
@@ -193,6 +193,16 @@ def main(world_size, args):
     if dataset == 'imagenet': # for imagenet, if we selected the corrected version of VGG (1hich is only for CIFAR10, ignore the corrected part)
         if '_corrected' in net_type and 'resnet' in net_type:
             net_type = net_type.replace('_corrected', '')
+    
+    if dataset == 'MNIST':
+        # make sure we did not select a net which cna't run with MNIST< namely anything apart form the simple MNIST net
+        if net_type != 'Simple_net_for_MNIST':
+            print('rank:{}. Because dataset == MNIST we can only use the Simple_net_for_MNIST net, so overwriting given parameter as such'.format(rank))
+        net_type = 'Simple_net_for_MNIST'
+    else:
+        if net_type == 'Simple_net_for_MNIST':
+            print('net_type = Simple_net_for_MNIST is only possible when dataset = MNIST. Changing to default net: VGG16_bn_lmxp')
+            net_type = 'VGG16_bn_lmxp'
     ##### END: for data root path #######################
     
     ################################  SCHEDULES ######################################################################
@@ -420,11 +430,11 @@ def parse_args():
     parser.add_argument('--brand_corection_dim_frac', type=float, default=0.2, help='what percentage of modes to refresh in the correction (avoid using close to 100% - at 100% the correction is as expensive an an RSVD and doing an RSVD is cheaper - in that case use B-R with higher "R" requency (for LLs)' )
     
     ### for selecting net type
-    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'Possible Choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected' )
+    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'Possible Choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected. Simple_net_for_MNIST is also possible and works only for MNIST: changed to VGG16_bn_lmxp if dataset is other than MNIST and the -for_MNIST net is selected' )
     
     ### for dealing with data path (where the dlded dataset is stored) and dataset itself
     parser.add_argument('--data_root_path', type=str, default = '/data/math-opt-ml/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
-    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
+    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: MNIST, cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
