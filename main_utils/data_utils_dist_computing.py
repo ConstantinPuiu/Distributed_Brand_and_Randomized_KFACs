@@ -19,7 +19,7 @@ def get_transforms(dataset):
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
 
-    if dataset == 'cifar100':
+    elif dataset == 'cifar100':
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -32,7 +32,7 @@ def get_transforms(dataset):
             transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
         ])
 
-    if dataset == 'imagenette':
+    elif dataset == 'imagenette':
         stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         transform_train = transforms.Compose([
                          transforms.transforms.Resize([128,128]), #transforms.Resize([224,224]), #Resize([32,32])
@@ -40,8 +40,26 @@ def get_transforms(dataset):
                          transforms.RandomCrop(128, padding=4, padding_mode='reflect'), #transforms.RandomCrop(224, padding=4, padding_mode='reflect'), #RandomCrop(32, padding=4, padding_mode='reflect')
                          transforms.ToTensor(), 
                          transforms.Normalize(*stats,inplace=True)])
-
+       
         transform_test = transforms.Compose([transforms.Resize([128,128]), transforms.ToTensor(), transforms.Normalize(*stats)]) #transforms.Compose([transforms.Resize([224,224]), transforms.ToTensor(), transforms.Normalize(*stats)])
+        
+    elif dataset == 'imagenet':
+        stats = ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225) )
+        transform_train = transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(*stats),
+            ])
+        
+        transform_test = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(*stats),
+            ])
+
+        
         
     assert transform_test is not None and transform_train is not None, 'Error, no dataset %s' % dataset
     return transform_train, transform_test
@@ -51,7 +69,7 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
     transform_train, transform_test = get_transforms(dataset)
     trainset, testset = None, None
     # adapt root folder based on chosen dataset
-    root = root + '/' + dataset + 'data/'
+    root = root + '/' + dataset + '_data/'
     # get dataset
     if dataset == 'cifar10':
         trainset = torchvision.datasets.CIFAR10(root=root, train=True, download=True, transform=transform_train)
