@@ -11,7 +11,6 @@ import torchvision.transforms as transforms
 import torch
 import random as rng
 import time
-import argparse
 from datetime import datetime
 from torch.utils.data.dataloader import default_collate
 
@@ -24,6 +23,7 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_dataloader
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_kfac_lean_Kfactors_batchsize import KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
+from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
 
@@ -259,46 +259,9 @@ def main(world_size, args):
     cleanup()
     print('GPU rank = {} of {} is done correctly!'.format(rank, world_size))
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--world_size', type=int, required=True)
-    
-    parser.add_argument('--kfac_clip', type=int, default=7e-2, help='clip factor for Kfac step' )
-    parser.add_argument('--stat_decay', type=int, default=0.95, help='the rho' )
-    parser.add_argument('--momentum', type=int, default=0.0, help='momentum' )
-    parser.add_argument('--WD', type=int, default=7e-4, help='Weight decay' )
-    parser.add_argument('--batch_size', type = int, default = 256, help = 'Batch size for 1 GPU (total BS for grad is n_gpu x *this). Total BS for K-factors is just *this! (for lean-ness)')
-    
-    ### Others added only once moved to CIFAR10
-    parser.add_argument('--n_epochs', type=int, default = 10, help = 'Number_of_epochs' )
-    parser.add_argument('--TCov_period', type=int, default = 20, help = 'Period of reupdating Kfactors (not inverses)' )
-    parser.add_argument('--TInv_period', type=int, default = 100, help = 'Period of reupdating K-factor INVERSE REPREZENTATIONS' )
-    
-    #### for efficient work allocaiton selection
-    parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
-    
-    ### for selecting net type
-    parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'Possible Choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected. Simple_net_for_MNIST is also possible and works only for MNIST: changed to VGG16_bn_lmxp if dataset is other than MNIST and the -for_MNIST net is selected' )
-    
-    ### for dealing with data path (where the dlded dataset is stored) and dataset itself
-    parser.add_argument('--data_root_path', type=str, default = '/data/math-opt-ml/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
-    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: MNIST, cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
-    
-    ############# SCHEDULE FLAGS #####################################################
-    ### for dealing with PERIOD SCHEDULES
-    parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/KFAC_schedules.py' ) 
-    parser.add_argument('--TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TCov_schedule (schedule dict for TCov) from solver/schedules/KFAC_schedules.py' ) 
-    ###for dealing with other optimizer schedules
-    parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/schedules/KFAC_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
-    
-    ############# END: SCHEDULE FLAGS #################################################
-    
-    args = parser.parse_args()
-    return args
-
 if __name__ == '__main__':
     # suppose we have 3 gpus
-    args = parse_args()
+    args = parse_args(solver_name = 'KFAC')
     now_start = datetime.now()
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
