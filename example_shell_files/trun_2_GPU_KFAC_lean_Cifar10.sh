@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --time=00:10:00
-#SBATCH --job-name=2G_K
+#SBATCH --job-name=2G_K_C
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=4

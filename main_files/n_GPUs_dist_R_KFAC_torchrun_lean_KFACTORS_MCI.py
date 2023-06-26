@@ -213,10 +213,12 @@ def main(world_size, args):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
     
     print('GPU-rank {} : Partitioning dataset ...'.format(rank))
+    t_partition_dset_1 = time.time()
     train_set, testset, bsz, num_classes = partition_dataset(collation_fct, data_root_path, dataset, batch_size)
     len_train_set = len(train_set)
-    print('GPU-rank {} : Done partitioning dataset!  : len(train_set) = {}'.format(rank, len_train_set))
-
+    t_partition_dset_2 = time.time()
+    print('GPU-rank {} : Done partitioning dataset in {:.2f} s! : len(train_set) = {}'.format(rank, t_partition_dset_2 - t_partition_dset_1, len_train_set))
+    
     ##################### net selection #######################################
     print('GPU-rank {} : Setting up model (neural netowrk)...'.format(rank))
     model = get_net_main_util_fct(net_type, rank, num_classes = num_classes)
