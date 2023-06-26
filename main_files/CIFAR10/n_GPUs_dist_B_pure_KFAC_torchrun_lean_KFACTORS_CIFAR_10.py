@@ -230,11 +230,13 @@ def main(world_size, args):
     def collation_fct(x):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
 
+    print('GPU-rank {} : Partitioning dataset ...'.format(rank))
     train_set, testset, bsz, num_classes = partition_dataset(collation_fct, data_root_path, dataset, batch_size)
     len_train_set = len(train_set)
-    print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
+    print('GPU-rank {} : Done partitioning dataset!  : len(train_set) = {}'.format(rank, len_train_set))
     
     ##################### net selection #######################################
+    print('GPU-rank {} : Setting up model (neural netowrk)...'.format(rank))
     model = get_net_main_util_fct(net_type, rank, num_classes = num_classes)
     ##################### END: net selection ##################################
 
@@ -243,8 +245,10 @@ def main(world_size, args):
     # output_device tells DDP where to output, in our case, it is rank
     # find_unused_parameters=True instructs DDP to find unused output of the forward() function of any module in the model
     model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters = False)
+    print('GPU-rank {} : Done setting up model (neural netowrk)!'.format(rank))
     #################### The above is defined previously
 
+    print('GPU-rank {} : Initializing optimizer...'.format(rank))
     optimizer =  B_KFACOptimizer(model, rank = rank, world_size = world_size, 
                                 lr_function = l_rate_function, momentum = momentum, stat_decay = stat_decay, 
                                 kl_clip = kfac_clip, damping = KFAC_damping, 
@@ -277,6 +281,7 @@ def main(world_size, args):
                               #lr=0.01, momentum=0.5) #Your_Optimizer()
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
+    print('GPU-rank {} : Done initializing optimizer. Started training...'.format(rank))
     
     tstart = time.time()
     for epoch in range(0, n_epochs):
@@ -313,7 +318,8 @@ def main(world_size, args):
                 print('\ntype(y) = {}, y = {}, y.get_device() = {}\n'.format(type(y),y, y.get_device()))
                 loss = loss_fn(pred, y)
             
-            #print('RANK {}: the loss is {}'.format(rank, loss))
+            #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
+                
             loss.backward()
             if jdx == len_train_set - 1 and epoch == n_epochs - 1:
                 tend = time.time()
