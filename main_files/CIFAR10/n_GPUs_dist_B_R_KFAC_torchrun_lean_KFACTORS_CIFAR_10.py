@@ -83,7 +83,7 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
     if dataset in ['cifar10', 'cifar100', 'imagenet']:
-        trainset, testset = get_dataloader(dataset = dataset, train_batch_size = batch_size,
+        trainset, testset, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
                                           test_batch_size = batch_size,
                                           collation_fct = collation_fct, root = data_root_path)
     else:
@@ -99,7 +99,7 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
     
     """testset is preprocessed but NOT split over GPUS and currently NOT EVER USED (only blind training is performed).
     TODO: implement testset stuff and have a TEST at the end of epoch and at the end of training!"""
-    return train_set, testset, batch_size
+    return train_set, testset, batch_size, num_classes
     
 
 def cleanup():
@@ -242,12 +242,12 @@ def main(world_size, args):
     def collation_fct(x):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
 
-    train_set, testset, bsz = partition_dataset(collation_fct, data_root_path, dataset, batch_size)
+    train_set, testset, bsz, num_classes = partition_dataset(collation_fct, data_root_path, dataset, batch_size)
     len_train_set = len(train_set)
     print('Rank (GPU number) = {}: len(train_set) = {}'.format(rank, len_train_set))
     
     ##################### net selection #######################################
-    model = get_net_main_util_fct(net_type, rank, num_classes = 10)
+    model = get_net_main_util_fct(net_type, rank, num_classes = num_classes)
     ##################### END: net selection ##################################
 
     # wrap the model with DDP

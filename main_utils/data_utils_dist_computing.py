@@ -80,6 +80,10 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
     elif dataset == 'imagenet':
         trainset = torchvision.datasets.ImageNet(root=root, train=True, download=True, transform=transform_train)
         testset = torchvision.datasets.ImageNet(root=root, train=False, download=True, transform=transform_test)
+        # link to download imagenet from to work with this function : https://image-net.org/challenges/LSVRC/2012/2012-downloads.php . 
+        # Link to download webpage (which requeires approval) also at https://pytorch.org/vision/main/generated/torchvision.datasets.ImageNet.html.
+        # see Olga Russakovsky*, Jia Deng*, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein,
+        # Alexander C. Berg and Li Fei-Fei. (* = equal contribution) ImageNet Large Scale Visual Recognition Challenge. arXiv:1409.0575, 2014
     
     """if dataset == 'imagenette':
         # data_dir = '/content/gdrive/My Drive/datasets/imagenette/imagenette2' (root should be this)
@@ -92,5 +96,6 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
         #trainset = torch.utils.data.TensorDataset(train_features, train_labels)"""
 
     assert trainset is not None and testset is not None, 'Error, no dataset %s' % dataset
-
-    return trainset, testset
+    
+    num_classes = len(trainset.classes)
+    return trainset, testset, num_classes
