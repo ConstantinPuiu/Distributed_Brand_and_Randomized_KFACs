@@ -1,15 +1,7 @@
 import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
-import torchvision.datasets as datasets
 from torch.nn.parallel import DistributedDataParallel as DDP
-#from simple_net_libfile_2 import Net
-import torch.optim as optim
-import torch.nn.functional as F
-import torch.multiprocessing as mp
 import os
-import torchvision.transforms as transforms
 import torch
-import random as rng
 import time
 from datetime import datetime
 import datetime as dateT
@@ -19,93 +11,16 @@ print('torch.__version__ = {}'.format(torch.__version__))
 
 import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
-#sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
 
 #from true_kfac_FC_project_adaptive_damping import KFACOptimizer #distributed_kfac_simplest_form
-from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_dataloader
+from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import partition_dataset, cleanup
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_B_kfac_lean_Kfactors_batchsize import B_KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
 from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
 
-#from torch.utils.data.distributed import DistributedSampler
-"""def prepare(rank, world_size, batch_size=128, pin_memory=False, num_workers=0):
-    #dataset = Your_Dataset()
-    dataset = datasets.MNIST('./data', train=True, download=True,
-                             transform=transforms.Compose([
-                                 transforms.ToTensor(),
-                                 transforms.Normalize((0.1307,), (0.3081,))
-                             ]))
-    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=False, drop_last=False)
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, pin_memory=pin_memory, num_workers=num_workers, drop_last=False, shuffle=False, sampler=sampler)
-
-    return dataloader"""
-
-""" Dataset partitioning helper """
-class Partition(object):
-
-    def __init__(self, data, index):
-        self.data = data
-        self.index = index
-
-    def __len__(self):
-        return len(self.index)
-
-    def __getitem__(self, index):
-        data_idx = self.index[index]
-        return self.data[data_idx]
-
-
-class DataPartitioner(object):
-
-    def __init__(self, data, sizes=[0.7, 0.2, 0.1], seed=1234):
-        self.data = data
-        self.partitions = []
-        #rng = Random()
-        rng.seed(seed)
-        data_len = len(data)
-        indexes = [x for x in range(0, data_len)]
-        rng.shuffle(indexes)
-
-        for frac in sizes:
-            part_len = int(frac * data_len)
-            self.partitions.append(indexes[0:part_len])
-            indexes = indexes[part_len:]
-
-    def use(self, partition):
-        return Partition(self.data, self.partitions[partition])
-
-''' use as'''
-""" Partitioning dataset """
-def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
-    size = dist.get_world_size()
-    #bsz = 256 #int(128 / float(size))
-    if dataset in ['MNIST', 'cifar10', 'cifar100', 'imagenet']:
-        trainset, testset, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
-                                          test_batch_size = batch_size,
-                                          collation_fct = collation_fct, root = data_root_path)
-    else:
-        raise NotImplementedError('dataset = {} is not implemeted'.format(dataset))
-        
-    partition_sizes = [1.0 / size for _ in range(size)]
-    partition = DataPartitioner(trainset, partition_sizes)
-    partition = partition.use(dist.get_rank())
-    train_set = torch.utils.data.DataLoader(partition,
-                                         batch_size=batch_size,
-                                         collate_fn = collation_fct,
-                                         shuffle=True)
-    
-    """testset is preprocessed but NOT split over GPUS and currently NOT EVER USED (only blind training is performed).
-    TODO: implement testset stuff and have a TEST at the end of epoch and at the end of training!"""
-    return train_set, testset, batch_size, num_classes
-
-def cleanup():
-    dist.destroy_process_group()
-
-
-#from torch.nn.parallel import DistributedDataParallel as DDP
 def main(world_size, args):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
