@@ -16,7 +16,7 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import partition_dataset, cleanup
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_B_R_kfac_lean_Kfactors_batchsize import B_R_KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
-from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args
+from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
 
@@ -30,21 +30,10 @@ def main(world_size, args):
     rank = dist.get_rank()
     print('Hello from GPU rank {} with pytorch DDP\n'.format(rank))
     
-    ### KFAC HYPERPARAMETERS ##
-    kfac_clip = args.kfac_clip; #KFAC_damping = 1e-01 #3e-02; 
-    stat_decay = args.stat_decay #0.95
-    momentum = args.momentum
-    WD = args.WD #0.000007 #1 ########  7e-4 got 9.00 +% acc conistently. 7e-06 worked fine too!
-    batch_size = args.batch_size
-    ### RSVD specific params or stuff that 1st appeared in rsvd(clip and damping type)
-    rsvd_rank = args.rsvd_rank
-    rsvd_oversampling_parameter = args.rsvd_oversampling_parameter
-    rsvd_niter = args.rsvd_niter
-    damping_type = args.damping_type #'adaptive',
-    clip_type = args.clip_type
+    # adjust args: turn 0-1 variables that should be True / False into True / False AND check and correct (args.net_type, args.dataset) combination
+    args = adjust_args_for_0_1_and_compatibility(args, rank, solver_name = 'BR-KFAC')
     
     ###others only added after starting CIFAR10
-    n_epochs = args.n_epochs
     TCov_period = args.TCov_period
     TInv_period = args.TInv_period
     
@@ -54,65 +43,20 @@ def main(world_size, args):
     brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
     # ====================================================
     
-    
-    ### rsvd adaptive rank ##########
-    if args.adaptable_rsvd_rank == 0:
-        adaptable_rsvd_rank = False
-    else:
-        adaptable_rsvd_rank = True
     rsvd_rank_adaptation_TInv_multiplier = args.rsvd_rank_adaptation_TInv_multiplier
     rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
     maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
     rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
     # ====================================================
     
-    ### B adaptive rank ##########
-    if args.adaptable_B_rank == 0:
-        adaptable_B_rank = False
-    else:
-        adaptable_B_rank = True
     B_rank_adaptation_T_brand_updt_multiplier = args.B_rank_adaptation_T_brand_updt_multiplier
     B_target_truncation_rel_err = args.B_target_truncation_rel_err
     maximum_ever_admissible_B_rank = args.maximum_ever_admissible_B_rank    
     B_adaptive_max_history = args.B_adaptive_max_history
     # ===================================================
     
-    #### for selcting net type ##############
-    net_type = args.net_type
-    #########################################
-    
-    ### added for efficient work allocation
-    if args.work_alloc_propto_RSVD_and_B_cost == 0:
-        work_alloc_propto_RSVD_and_B_cost = False
-    else:
-        work_alloc_propto_RSVD_and_B_cost = True
     # ====================================================
-        
-    ######## added to control whether we B-truncate before or after inversion ###########
-    if args.B_truncate_before_inversion == 0:
-        B_truncate_before_inversion = False
-    else:
-        B_truncate_before_inversion = True
-    ######## END: added to control whether we B-truncate before or after inversion ######
-        
-    ##### for data root path and dataset type ###########
-    data_root_path = args.data_root_path
-    dataset = args.dataset
     
-    if dataset == 'imagenet': # for imagenet, if we selected the corrected version of VGG (1hich is only for CIFAR10, ignore the corrected part)
-        if '_corrected' in net_type and 'resnet' in net_type:
-            net_type = net_type.replace('_corrected', '')
-    
-    if dataset == 'MNIST':
-        # make sure we did not select a net which cna't run with MNIST< namely anything apart form the simple MNIST net
-        if net_type != 'Simple_net_for_MNIST':
-            print('rank:{}. Because dataset == MNIST we can only use the Simple_net_for_MNIST net, so overwriting given parameter as such'.format(rank))
-        net_type = 'Simple_net_for_MNIST'
-    else:
-        if net_type == 'Simple_net_for_MNIST':
-            print('net_type = Simple_net_for_MNIST is only possible when dataset = MNIST. Changing to default net: VGG16_bn_lmxp')
-            net_type = 'VGG16_bn_lmxp'
-    ##### END: for data root path #######################
     
     ################################  SCHEDULES ######################################################################
     ### for dealing with PERIOD SCHEDULES
@@ -168,7 +112,7 @@ def main(world_size, args):
 
     print('GPU-rank {} : Partitioning dataset ...'.format(rank))
     t_partition_dset_1 = time.time()
-    train_set, testset, bsz, num_classes = partition_dataset(collation_fct, data_root_path, dataset, batch_size)
+    train_set, testset, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset, args.batch_size)
     len_train_set = len(train_set)
     t_partition_dset_2 = time.time()
     print('GPU-rank {} : Done partitioning dataset in {:.2f} s! : len(train_set) = {}'.format(rank, t_partition_dset_2 - t_partition_dset_1, len_train_set))
@@ -176,7 +120,7 @@ def main(world_size, args):
     
     ##################### net selection #######################################
     print('GPU-rank {} : Setting up model (neural netowrk)...'.format(rank))
-    model = get_net_main_util_fct(net_type, rank, num_classes = num_classes)
+    model = get_net_main_util_fct(args.net_type, rank, num_classes = num_classes)
     ##################### END: net selection ##################################
 
     # wrap the model with DDP
@@ -189,30 +133,30 @@ def main(world_size, args):
 
     print('GPU-rank {} : Initializing optimizer...'.format(rank))
     optimizer =  B_R_KFACOptimizer(model, rank = rank, world_size = world_size, 
-                               lr_function = l_rate_function, momentum = momentum, stat_decay = stat_decay, 
-                                kl_clip = kfac_clip, damping = KFAC_damping, 
-                                weight_decay = WD, TCov = TCov_period,
+                               lr_function = l_rate_function, momentum = args.momentum, stat_decay = args.stat_decay, 
+                                kl_clip = args.kfac_clip, damping = KFAC_damping, 
+                                weight_decay = args.WD, TCov = TCov_period,
                                 TInv = TInv_period,
-                                rsvd_rank = rsvd_rank,
-                                rsvd_oversampling_parameter = rsvd_oversampling_parameter,
-                                rsvd_niter = rsvd_niter,
-                                damping_type = damping_type, #'adaptive',
-                                clip_type = clip_type,
+                                rsvd_rank = args.rsvd_rank,
+                                rsvd_oversampling_parameter = args.rsvd_oversampling_parameter,
+                                rsvd_niter = args.rsvd_niter,
+                                damping_type = args.damping_type, #'adaptive',
+                                clip_type = args.clip_type,
                                 B_R_period = B_R_period, 
                                 brand_r_target_excess = brand_r_target_excess,
                                 brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
                                 #added to dea with truncation before inversion
-                                B_truncate_before_inversion = B_truncate_before_inversion,
+                                B_truncate_before_inversion = args.B_truncate_before_inversion,
                                 # added to deal with eff work alloc
-                                work_alloc_propto_RSVD_and_B_cost = work_alloc_propto_RSVD_and_B_cost,
+                                work_alloc_propto_RSVD_and_B_cost = args.work_alloc_propto_RSVD_and_B_cost,
                                 # for dealing with adaptable rsvd rank
-                                adaptable_rsvd_rank = adaptable_rsvd_rank,
+                                adaptable_rsvd_rank = args.adaptable_rsvd_rank,
                                 rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
                                 maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
                                 rsvd_adaptive_max_history = rsvd_adaptive_max_history,
                                 rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
                                 # for dealing with adaptable B rank
-                                adaptable_B_rank = adaptable_B_rank,
+                                adaptable_B_rank = args.adaptable_B_rank,
                                 B_rank_adaptation_T_brand_updt_multiplier = B_rank_adaptation_T_brand_updt_multiplier,
                                 B_target_truncation_rel_err = B_target_truncation_rel_err,
                                 maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank,    
@@ -224,7 +168,7 @@ def main(world_size, args):
     print('GPU-rank {} : Done initializing optimizer. Started training...'.format(rank))
     
     tstart = time.time()
-    for epoch in range(0, n_epochs):
+    for epoch in range(0, args.n_epochs):
         # if we are using DistributedSampler, we have to tell it which epoch this is
         #dataloader.sampler.set_epoch(epoch)
         
@@ -263,7 +207,7 @@ def main(world_size, args):
             #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
                 
             loss.backward()
-            if jdx == len_train_set - 1 and epoch == n_epochs - 1:
+            if jdx == len_train_set - 1 and epoch == args.n_epochs - 1:
                 tend = time.time()
                 print('TIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(tend-tstart, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', loss: {}\n'.format(str(loss.item())))
                 #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:

@@ -1,12 +1,79 @@
 import argparse
 
 def parse_args(solver_name):
+    # rank here is the GPU rank (i.e. GPU index)
     ## LL = Large Linear Layers
     ## CaSL = Conv and small linear layers
     parser = argparse.ArgumentParser()
     parser = arg_parser_add_arguments(parser, solver_name = solver_name)
     
+    # parse args
     args = parser.parse_args()
+            
+    return args
+
+def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
+    ###########################################################################
+    #### transform 0-1 attributes = variables into True/False #################
+    ###########################################################################
+    
+    ############## helper fct defn ####################
+    def turn_0_1_var_into_T_F(v):
+        if v == 0:
+            return False
+        else:
+            return True
+    ############## end helper fct defn #################
+        
+    if solver_name == 'KFAC':
+        args.work_alloc_propto_EVD_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_EVD_cost)
+        
+    elif solver_name == 'R-KFAC':
+        args.work_alloc_propto_RSVD_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_RSVD_cost)
+        args.work_eff_alloc_with_time_measurement = turn_0_1_var_into_T_F(args.work_eff_alloc_with_time_measurement)
+        args.adaptable_rsvd_rank = turn_0_1_var_into_T_F(args.adaptable_rsvd_rank)
+        
+    elif solver_name == 'B-KFAC':
+        args.adaptable_rsvd_rank = turn_0_1_var_into_T_F(args.adaptable_rsvd_rank)
+        args.work_alloc_propto_RSVD_and_B_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_RSVD_and_B_cost)
+        args.adaptable_B_rank = turn_0_1_var_into_T_F(args.adaptable_B_rank)
+        args.B_truncate_before_inversion = turn_0_1_var_into_T_F(args.B_truncate_before_inversion)
+        
+    elif solver_name == 'BR-KFAC':
+        args.adaptable_rsvd_rank = turn_0_1_var_into_T_F(args.adaptable_rsvd_rank)
+        args.work_alloc_propto_RSVD_and_B_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_RSVD_and_B_cost)
+        args.adaptable_B_rank = turn_0_1_var_into_T_F(args.adaptable_B_rank)
+        args.B_truncate_before_inversion = turn_0_1_var_into_T_F(args.B_truncate_before_inversion)
+        
+    elif solver_name == 'BRC-KFAC':
+        args.adaptable_rsvd_rank = turn_0_1_var_into_T_F(args.adaptable_rsvd_rank)
+        args.work_alloc_propto_RSVD_and_B_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_RSVD_and_B_cost)
+        args.adaptable_B_rank = turn_0_1_var_into_T_F(args.adaptable_B_rank)
+        args.B_truncate_before_inversion = turn_0_1_var_into_T_F(args.B_truncate_before_inversion)
+    else:
+        raise ValueError('solver_name = {} is not a valid choice, see source code and implement if required !'.format(solver_name))
+    
+    ###########################################################################
+    #### END: transform 0-1 attributes = variables into True/False ############
+    ###########################################################################
+    
+    # ======== check if args.dataset, args.net_type) pair can go together correctly #===
+    # and change net if not so==========================================================
+    if args.dataset == 'imagenet': # for imagenet, if we selected the corrected version of VGG (1hich is only for CIFAR10, ignore the corrected part)
+        if '_corrected' in args.net_type and 'resnet' in args.net_type:
+            args.net_type = args.net_type.replace('_corrected', '')
+    
+    if args.dataset == 'MNIST':
+        # make sure we did not select a net which cna't run with MNIST< namely anything apart form the simple MNIST net
+        if args.net_type != 'Simple_net_for_MNIST':
+            print('rank:{}. Because dataset == MNIST we can only use the Simple_net_for_MNIST net, so overwriting given parameter as such'.format(rank))
+        args.net_type = 'Simple_net_for_MNIST'
+    else:
+        if args.net_type == 'Simple_net_for_MNIST':
+            print('args.net_type = Simple_net_for_MNIST is only possible when dataset = MNIST. Changing to default net: VGG16_bn_lmxp')
+            args.net_type = 'VGG16_bn_lmxp'
+    # ===================================================================================
+        
     return args
 
 def arg_parser_add_arguments(parser, solver_name):
@@ -147,3 +214,23 @@ def parse_BRC_specific_arguments(parser):
     ############# END: SCHEDULE FLAGS #################################################
     
     return parser
+
+""" for testing"""
+if __name__ == '__main__':
+    solver_name = 'BRC-KFAC' # change this (cannot imput from keyboard as this would change main code functionality)
+    args = parse_args(solver_name = solver_name)
+    args = adjust_args_for_0_1_and_compatibility(args, rank = 0)
+    if '_corrected' in args.net_type and 'resnet' in args.net_type:
+            args.net_type = args.net_type.replace('_corrected', '')
+        
+    if solver_name in ['KFAC']:
+    #### should throw an error unless --world_size is given! 
+        print( 'args.net_type = {}, args.work_alloc_propto_EVD_cost = {}'.format( args.net_type , args.work_alloc_propto_EVD_cost) )
+        
+    elif solver_name in ['R-KFAC']:
+    #### should throw an error unless --world_size is given! 
+        print( 'args.net_type = {}, args.work_alloc_propto_RSVD_cost = {}, args.work_eff_alloc_with_time_measurement = {}, args.adaptable_rsvd_rank = {}'.format( args.net_type , args.work_alloc_propto_RSVD_cost, args.work_eff_alloc_with_time_measurement , args.adaptable_rsvd_rank) )
+    
+    elif solver_name in ['B-KFAC','BR-KFAC', 'BRC-KFAC']:
+    #### should throw an error unless --world_size is given! 
+        print( 'args.net_type = {}, args.adaptable_rsvd_rank = {}, args.adaptable_B_rank = {}, args.work_alloc_propto_RSVD_and_B_cost = {}, args.B_truncate_before_inversion = {}'.format( args.net_type , args.adaptable_rsvd_rank, args.adaptable_B_rank, args.work_alloc_propto_RSVD_and_B_cost , args.B_truncate_before_inversion) )
