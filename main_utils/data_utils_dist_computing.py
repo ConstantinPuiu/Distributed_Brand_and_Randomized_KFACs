@@ -150,7 +150,7 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
     transform_train, transform_test = get_transforms(dataset)
     trainset, testset = None, None
     # adapt root folder based on chosen dataset
-    root = root + '/' + dataset + '_data/'
+    root = root + dataset + '_data/'
     # get dataset
     if dataset == 'MNIST':
         trainset = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=transform_train)
@@ -162,8 +162,8 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
         trainset = torchvision.datasets.CIFAR100(root=root, train=True, download=True, transform=transform_train)
         testset = torchvision.datasets.CIFAR100(root=root, train=False, download=True, transform=transform_test)
     elif dataset == 'imagenet':
-        trainset = torchvision.datasets.ImageNet(root=root, train=True, download=True, transform=transform_train)
-        testset = torchvision.datasets.ImageNet(root=root, train=False, download=True, transform=transform_test)
+        trainset = torchvision.datasets.ImageNet(root=root, split = 'train', transform=transform_train)
+        testset = torchvision.datasets.ImageNet(root=root, split = 'val', transform=transform_test)
         # link to download imagenet from to work with this function : https://image-net.org/challenges/LSVRC/2012/2012-downloads.php . 
         # Link to download webpage (which requeires approval) also at https://pytorch.org/vision/main/generated/torchvision.datasets.ImageNet.html.
         # see Olga Russakovsky*, Jia Deng*, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein,
