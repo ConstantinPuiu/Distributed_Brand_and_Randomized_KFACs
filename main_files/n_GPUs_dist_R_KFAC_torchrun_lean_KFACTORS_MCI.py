@@ -15,7 +15,7 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import partition_dataset, cleanup
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_R_kfac_lean_Kfactors_batchsize import R_KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
-from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility
+from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility, adjust_args_for_schedules
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
 
@@ -29,44 +29,10 @@ def main(world_size, args):
     
     # adjust args: turn 0-1 variables that should be True / False into True / False AND check and correct (args.net_type, args.dataset) combination
     args = adjust_args_for_0_1_and_compatibility(args, rank, solver_name = 'R-KFAC')
-    
-    ###others only added after starting CIFAR10
-    TCov_period = args.TCov_period
-    TInv_period = args.TInv_period
-    
-    rsvd_rank_adaptation_TInv_multiplier = args.rsvd_rank_adaptation_TInv_multiplier
-    rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
-    maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
-    rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
-    # ====================================================
+    ###################################### end adjust 0-1 -===> True / False ######################################################################
     
     ################################  SCHEDULES ######################################################################
-    ### for dealing with PERIOD SCHEDULES
-    if args.TInv_schedule_flag == 0: # then it's False
-        TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
-    else:# if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TInv_schedule
-        if 0 in TInv_schedule.keys(): # overwrite TInv_period
-            print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
-            TInv_period = TInv_schedule[0]
-    
-    if args.TCov_schedule_flag == 0: # then it's False
-        TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
-    else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TCov_schedule
-        if 0 in TCov_schedule.keys(): # overwrite TInv_period
-            print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TCov_period, TCov_schedule[0]))
-            TCov_period = TCov_schedule[0]
-    
-    #########################################
-            
-    ### for dealing with other parameters SCHEDULES ####
-    if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
-        KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
-    else:
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import KFAC_damping_schedule
-    KFAC_damping = KFAC_damping_schedule[0]
-    ### TO DO: implement the schedules properly: now only sticks at the first entryforever in all 3
+    args, TInv_schedule, TCov_schedule, KFAC_damping_schedule, KFAC_damping = adjust_args_for_schedules(args, solver_name = 'R-KFAC')
     ################################ END SCHEDULES ###################################################################
     
     # ====================================================
@@ -100,24 +66,25 @@ def main(world_size, args):
     optimizer =  R_KFACOptimizer(model, rank = rank, world_size = world_size, 
                                lr_function = l_rate_function, momentum = args.momentum, stat_decay = args.stat_decay, 
                                 kl_clip = args.kfac_clip, damping = KFAC_damping, 
-                                weight_decay = args.WD, TCov = TCov_period,
-                                TInv = TInv_period,
+                                weight_decay = args.WD, TCov = args.TCov_period,
+                                TInv = args.TInv_period,
+                                damping_type = args.damping_type, #'adaptive',
+                                clip_type = args.clip_type,
+                                # specific to R-K-fac
                                 rsvd_rank = args.rsvd_rank,
                                 rsvd_oversampling_parameter = args.rsvd_oversampling_parameter,
                                 rsvd_niter = args.rsvd_niter,
-                                damping_type = args.damping_type, #'adaptive',
-                                clip_type = args.clip_type,
                                 # added to deal with eff work alloc
                                 work_alloc_propto_RSVD_cost = args.work_alloc_propto_RSVD_cost,
                                 work_eff_alloc_with_time_measurement = args.work_eff_alloc_with_time_measurement,
                                 # added to deal with adaptable rsvd rank
                                 adaptable_rsvd_rank = args.adaptable_rsvd_rank,
-                                rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
-                                maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
-                                rsvd_adaptive_max_history = rsvd_adaptive_max_history,
-                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier
-                                )#    optim.SGD(model.parameters(),
-                              #lr=0.01, momentum=0.5) #Your_Optimizer()
+                                rsvd_rank_adaptation_TInv_multiplier = args.rsvd_rank_adaptation_TInv_multiplier,
+                                rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err,
+                                maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank, 
+                                rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
+                                )#    
+    
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
     print('GPU-rank {} : Done initializing optimizer. Started training...'.format(rank))

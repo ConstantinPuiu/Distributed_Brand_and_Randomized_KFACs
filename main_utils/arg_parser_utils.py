@@ -76,6 +76,204 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
         
     return args
 
+def adjust_args_for_schedules(args, solver_name):
+    # run  as: args, ... (dependend on solver_name) = adjust_args_for_schedules(args, solver_name)
+    if solver_name == 'KFAC':
+        ################################ KFAC SCHEDULES ######################################################################
+        ### for dealing with PERIOD SCHEDULES
+        if args.TInv_schedule_flag == 0: # then it's False
+            TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else:# if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.KFAC_schedules import TInv_schedule
+            if 0 in TInv_schedule.keys(): # overwrite TInv_period
+                print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(args.TInv_period, TInv_schedule[0]))
+                args.TInv_period = TInv_schedule[0]
+        
+        if args.TCov_schedule_flag == 0: # then it's False
+            TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.KFAC_schedules import TCov_schedule
+            if 0 in TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(args.TCov_period, TCov_schedule[0]))
+                args.TCov_period = TCov_schedule[0]
+        #########################################
+                
+        ### for dealing with other parameters SCHEDULES ####
+        if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
+            KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
+        else:
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.KFAC_schedules import KFAC_damping_schedule
+        KFAC_damping = KFAC_damping_schedule[0]
+        ################################ END KFAC SCHEDULES ###################################################################
+        return args, TInv_schedule, TCov_schedule, KFAC_damping_schedule, KFAC_damping
+    
+    elif solver_name == 'R-KFAC':
+        ################################ R-KFAC SCHEDULES ######################################################################
+        ### for dealing with PERIOD SCHEDULES
+        if args.TInv_schedule_flag == 0: # then it's False
+            TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else:# if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TInv_schedule
+            if 0 in TInv_schedule.keys(): # overwrite TInv_period
+                print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(args.TInv_period, TInv_schedule[0]))
+                args.TInv_period = TInv_schedule[0]
+        
+        if args.TCov_schedule_flag == 0: # then it's False
+            TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import TCov_schedule
+            if 0 in TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(args.TCov_period, TCov_schedule[0]))
+                args.TCov_period = TCov_schedule[0]
+        #########################################
+                
+        ### for dealing with other parameters SCHEDULES ####
+        if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
+            KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
+        else:
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.R_schedules import KFAC_damping_schedule
+        KFAC_damping = KFAC_damping_schedule[0]
+        ################################ END R-KFAC SCHEDULES ###################################################################
+        return args, TInv_schedule, TCov_schedule, KFAC_damping_schedule, KFAC_damping
+    
+    elif solver_name == 'B-KFAC':
+        ################################  B SCHEDULES ######################################################################
+        ### for dealing with PERIOD SCHEDULES
+        if args.TInv_schedule_flag == 0: # then it's False
+            TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else:# if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.B_schedules import TInv_schedule
+            if 0 in TInv_schedule.keys(): # overwrite TInv_period
+                print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(args.TInv_period, TInv_schedule[0]))
+                args.TInv_period = TInv_schedule[0]
+        
+        if args.TCov_schedule_flag == 0: # then it's False
+            TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.B_schedules import TCov_schedule
+            if 0 in TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(args.TCov_period, TCov_schedule[0]))
+                args.TCov_period = TCov_schedule[0]
+        
+        if args.brand_update_multiplier_to_TCov_schedule_flag == 0: # then it's False
+            brand_update_multiplier_to_TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.B_schedules import brand_update_multiplier_to_TCov_schedule
+            if 0 in brand_update_multiplier_to_TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --brand_update_multiplier_to_TCov_schedule_flag was set to non-zero (True) and brand_update_multiplier_to_TCov_schedule[0] exists, we overwrite brand_update_multiplier_to_TCov = {} (as passed in --brand_update_multiplier_to_TCov) to brand_update_multiplier_to_TCov_schedule[0] = {}'.format(args.brand_update_multiplier_to_TCov, brand_update_multiplier_to_TCov_schedule[0]))
+                args.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov_schedule[0]
+        #########################################
+                
+        ### for dealing with other parameters SCHEDULES ####
+        if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
+            KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
+        else:
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.B_schedules import KFAC_damping_schedule
+        KFAC_damping = KFAC_damping_schedule[0]
+        ################################ END B SCHEDULES ###################################################################
+        return args, TInv_schedule, TCov_schedule, brand_update_multiplier_to_TCov_schedule, KFAC_damping_schedule, KFAC_damping
+        
+    elif solver_name == 'BR-KFAC':
+        ################################  BR SCHEDULES ######################################################################
+        ### for dealing with PERIOD SCHEDULES
+        if args.TInv_schedule_flag == 0: # then it's False
+            TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else:# if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import TInv_schedule
+            if 0 in TInv_schedule.keys(): # overwrite TInv_period
+                print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(args.TInv_period, TInv_schedule[0]))
+                args.TInv_period = TInv_schedule[0]
+        
+        if args.TCov_schedule_flag == 0: # then it's False
+            TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import TCov_schedule
+            if 0 in TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(args.TCov_period, TCov_schedule[0]))
+                args.TCov_period = TCov_schedule[0]
+        
+        if args.brand_update_multiplier_to_TCov_schedule_flag == 0: # then it's False
+            brand_update_multiplier_to_TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import brand_update_multiplier_to_TCov_schedule
+            if 0 in brand_update_multiplier_to_TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --brand_update_multiplier_to_TCov_schedule_flag was set to non-zero (True) and brand_update_multiplier_to_TCov_schedule[0] exists, we overwrite brand_update_multiplier_to_TCov = {} (as passed in --brand_update_multiplier_to_TCov) to brand_update_multiplier_to_TCov_schedule[0] = {}'.format(args.brand_update_multiplier_to_TCov, brand_update_multiplier_to_TCov_schedule[0]))
+                args.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov_schedule[0]
+        
+        if args.B_R_period_schedule_flag == 0: # then it's False
+            B_R_period_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import B_R_period_schedule
+            if 0 in B_R_period_schedule.keys(): # overwrite TInv_period
+                print('Because --B_R_period_schedule_flag was set to non-zero (True) and B_R_period_schedule[0] exists, we overwrite B_R_period = {} (as passed in --B_R_period) to B_R_period_schedule[0] = {}'.format(args.B_R_period, B_R_period_schedule[0]))
+                args.B_R_period = B_R_period_schedule[0]
+        #########################################
+            
+        ### for dealing with other parameters SCHEDULES ####
+        if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
+            KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
+        else:
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import KFAC_damping_schedule
+        KFAC_damping = KFAC_damping_schedule[0]
+        ################################ END BR SCHEDULES ###################################################################
+        return args, TInv_schedule, TCov_schedule, brand_update_multiplier_to_TCov_schedule, B_R_period_schedule, KFAC_damping_schedule, KFAC_damping
+    
+    elif solver_name == 'BRC-KFAC':
+        ################################  BRC SCHEDULES ######################################################################
+        ### for dealing with PERIOD SCHEDULES
+        if args.TInv_schedule_flag == 0: # then it's False
+            TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else:# if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import TInv_schedule
+            if 0 in TInv_schedule.keys(): # overwrite TInv_period
+                print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(args.TInv_period, TInv_schedule[0]))
+                args.TInv_period = TInv_schedule[0]
+        
+        if args.TCov_schedule_flag == 0: # then it's False
+            TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import TCov_schedule
+            if 0 in TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(args.TCov_period, TCov_schedule[0]))
+                args.TCov_period = TCov_schedule[0]
+        
+        if args.brand_update_multiplier_to_TCov_schedule_flag == 0: # then it's False
+            brand_update_multiplier_to_TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import brand_update_multiplier_to_TCov_schedule
+            if 0 in brand_update_multiplier_to_TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --brand_update_multiplier_to_TCov_schedule_flag was set to non-zero (True) and brand_update_multiplier_to_TCov_schedule[0] exists, we overwrite brand_update_multiplier_to_TCov = {} (as passed in --brand_update_multiplier_to_TCov) to brand_update_multiplier_to_TCov_schedule[0] = {}'.format(args.brand_update_multiplier_to_TCov, brand_update_multiplier_to_TCov_schedule[0]))
+                args.brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov_schedule[0]
+                
+        if args.correction_multiplier_TCov_schedule_flag == 0: # then it's False
+            correction_multiplier_TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import correction_multiplier_TCov_schedule
+            if 0 in brand_update_multiplier_to_TCov_schedule.keys(): # overwrite TInv_period
+                print('Because --correction_multiplier_TCov_schedule_flag was set to non-zero (True) and correction_multiplier_TCov_schedule[0] exists, we overwrite correction_multiplier_TCov = {} (as passed in --correction_multiplier_TCov) to correction_multiplier_TCov_schedule[0] = {}'.format(args.correction_multiplier_TCov, correction_multiplier_TCov_schedule[0]))
+                args.correction_multiplier_TCov = correction_multiplier_TCov_schedule[0]
+        
+        if args.B_R_period_schedule_flag == 0: # then it's False
+            B_R_period_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else: # if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import B_R_period_schedule
+            if 0 in B_R_period_schedule.keys(): # overwrite TInv_period
+                print('Because --B_R_period_schedule_flag was set to non-zero (True) and B_R_period_schedule[0] exists, we overwrite B_R_period = {} (as passed in --B_R_period) to B_R_period_schedule[0] = {}'.format(args.B_R_period, B_R_period_schedule[0]))
+                args.B_R_period = B_R_period_schedule[0]
+        #########################################
+                
+        ### for dealing with other parameters SCHEDULES ####
+        if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
+            KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
+        else:
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import KFAC_damping_schedule
+        KFAC_damping = KFAC_damping_schedule[0]
+        ################################ END BRC SCHEDULES ###################################################################
+        return args, TInv_schedule, TCov_schedule, brand_update_multiplier_to_TCov_schedule, correction_multiplier_TCov_schedule, B_R_period_schedule, KFAC_damping_schedule, KFAC_damping
+    
+    else:
+        raise ValueError('solver_name = {} is not a valid choice, see source code and implement if required !'.format(solver_name))
+
 def arg_parser_add_arguments(parser, solver_name):
     if solver_name == 'KFAC':
         parser = parse_KFAC_specific_arguments(parser)

@@ -16,7 +16,7 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import partition_dataset, cleanup
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_B_R_C_kfac_lean_Kfactors_batchsize import B_R_C_KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
-from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility
+from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility, adjust_args_for_schedules
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
 
@@ -32,85 +32,12 @@ def main(world_size, args):
     
     # adjust args: turn 0-1 variables that should be True / False into True / False AND check and correct (args.net_type, args.dataset) combination
     args = adjust_args_for_0_1_and_compatibility(args, rank, solver_name = 'BRC-KFAC')
-    
-    ###others only added after starting CIFAR10
-    TCov_period = args.TCov_period
-    TInv_period = args.TInv_period
-    
-    ######### BRAND K-fac (also BRSKFAC) specific parameters
-    B_R_period = args.B_R_period
-    brand_r_target_excess = args.brand_r_target_excess
-    brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov
-    # ====================================================
-    
-    rsvd_rank_adaptation_TInv_multiplier = args.rsvd_rank_adaptation_TInv_multiplier
-    rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err
-    maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank    
-    rsvd_adaptive_max_history = args.rsvd_adaptive_max_history
-    # ====================================================
-    
-    B_rank_adaptation_T_brand_updt_multiplier = args.B_rank_adaptation_T_brand_updt_multiplier
-    B_target_truncation_rel_err = args.B_target_truncation_rel_err
-    maximum_ever_admissible_B_rank = args.maximum_ever_admissible_B_rank    
-    B_adaptive_max_history = args.B_adaptive_max_history
-    # ===================================================
-    
-    ### for dealing with the correction (the C in B-R-C) ################################
-    correction_multiplier_TCov = args.correction_multiplier_TCov
-    brand_corection_dim_frac = args.brand_corection_dim_frac
-    ### END: for dealing with the correction (the C in B-R-C) ###########################
+    ###################################### end adjust 0-1 -===> True / False ######################################################################
     
     ################################  SCHEDULES ######################################################################
-    ### for dealing with PERIOD SCHEDULES
-    if args.TInv_schedule_flag == 0: # then it's False
-        TInv_schedule = {} # empty dictionary - no scheduling "enforcement"
-    else:# if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import TInv_schedule
-        if 0 in TInv_schedule.keys(): # overwrite TInv_period
-            print('Because --TInv_schedule_flag was set to non-zero (True) and TInv_schedule[0] exists, we overwrite TInv_period = {} (as passed in --TInv_period) to TInv_schedule[0] = {}'.format(TInv_period, TInv_schedule[0]))
-            TInv_period = TInv_schedule[0]
-    
-    if args.TCov_schedule_flag == 0: # then it's False
-        TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
-    else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import TCov_schedule
-        if 0 in TCov_schedule.keys(): # overwrite TInv_period
-            print('Because --TCov_schedule_flag was set to non-zero (True) and TCov_schedule[0] exists, we overwrite TCov_period = {} (as passed in --TCov_period) to TCov_schedule[0] = {}'.format(TCov_period, TCov_schedule[0]))
-            TCov_period = TCov_schedule[0]
-    
-    if args.brand_update_multiplier_to_TCov_schedule_flag == 0: # then it's False
-        brand_update_multiplier_to_TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
-    else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import brand_update_multiplier_to_TCov_schedule
-        if 0 in brand_update_multiplier_to_TCov_schedule.keys(): # overwrite TInv_period
-            print('Because --brand_update_multiplier_to_TCov_schedule_flag was set to non-zero (True) and brand_update_multiplier_to_TCov_schedule[0] exists, we overwrite brand_update_multiplier_to_TCov = {} (as passed in --brand_update_multiplier_to_TCov) to brand_update_multiplier_to_TCov_schedule[0] = {}'.format(brand_update_multiplier_to_TCov, brand_update_multiplier_to_TCov_schedule[0]))
-            brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov_schedule[0]
-            
-    if args.correction_multiplier_TCov_schedule_flag == 0: # then it's False
-        correction_multiplier_TCov_schedule = {} # empty dictionary - no scheduling "enforcement"
-    else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import correction_multiplier_TCov_schedule
-        if 0 in brand_update_multiplier_to_TCov_schedule.keys(): # overwrite TInv_period
-            print('Because --correction_multiplier_TCov_schedule_flag was set to non-zero (True) and correction_multiplier_TCov_schedule[0] exists, we overwrite correction_multiplier_TCov = {} (as passed in --correction_multiplier_TCov) to correction_multiplier_TCov_schedule[0] = {}'.format(correction_multiplier_TCov, correction_multiplier_TCov_schedule[0]))
-            correction_multiplier_TCov = correction_multiplier_TCov_schedule[0]
-    
-    if args.B_R_period_schedule_flag == 0: # then it's False
-        B_R_period_schedule = {} # empty dictionary - no scheduling "enforcement"
-    else: # if the flag is True
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BRC_schedules import B_R_period_schedule
-        if 0 in B_R_period_schedule.keys(): # overwrite TInv_period
-            print('Because --B_R_period_schedule_flag was set to non-zero (True) and B_R_period_schedule[0] exists, we overwrite B_R_period = {} (as passed in --B_R_period) to B_R_period_schedule[0] = {}'.format(B_R_period, B_R_period_schedule[0]))
-            B_R_period = B_R_period_schedule[0]
-    
-    #########################################
-            
-    ### for dealing with other parameters SCHEDULES ####
-    if args.KFAC_damping_schedule_flag == 0: # if we don't set the damping shcedule in R_schedules.py, use DEFAULT (as below)
-        KFAC_damping_schedule = {0: 1e-01, 7: 1e-01, 25: 5e-02, 35: 1e-02}
-    else:
-        from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.BR_schedules import KFAC_damping_schedule
-    KFAC_damping = KFAC_damping_schedule[0]
-    ### TO DO: implement the schedules properly: now only sticks at the first entryforever in all 3
+    args, TInv_schedule, TCov_schedule, brand_update_multiplier_to_TCov_schedule, \
+        correction_multiplier_TCov_schedule, B_R_period_schedule, \
+            KFAC_damping_schedule, KFAC_damping = adjust_args_for_schedules(args, solver_name = 'BRC-KFAC')
     ################################ END SCHEDULES ###################################################################
     
     # ====================================================###############################
@@ -142,37 +69,40 @@ def main(world_size, args):
     optimizer =  B_R_C_KFACOptimizer(model, rank = rank, world_size = world_size, 
                                lr_function = l_rate_function, momentum = args.momentum, stat_decay = args.stat_decay, 
                                 kl_clip = args.kfac_clip, damping = KFAC_damping, 
-                                weight_decay = args.WD, TCov = TCov_period,
-                                TInv = TInv_period,
+                                weight_decay = args.WD, TCov = args.TCov_period,
+                                TInv = args.TInv_period,
+                                damping_type = args.damping_type, #'adaptive',
+                                clip_type = args.clip_type,
+                                # R-KFAC specific
                                 rsvd_rank = args.rsvd_rank,
                                 rsvd_oversampling_parameter = args.rsvd_oversampling_parameter,
                                 rsvd_niter = args.rsvd_niter,
-                                damping_type = args.damping_type, #'adaptive',
-                                clip_type = args.clip_type,
-                                B_R_period = B_R_period, 
-                                brand_r_target_excess = brand_r_target_excess,
-                                brand_update_multiplier_to_TCov = brand_update_multiplier_to_TCov,
+                                # BR-KFAC specific
+                                B_R_period = args.B_R_period, 
+                                # B-KFAC specific
+                                brand_r_target_excess = args.brand_r_target_excess,
+                                brand_update_multiplier_to_TCov = args.brand_update_multiplier_to_TCov,
                                 #added to dea with truncation before inversion
                                 B_truncate_before_inversion = args.B_truncate_before_inversion,
                                 # added to deal with eff work alloc
                                 work_alloc_propto_RSVD_and_B_cost = args.work_alloc_propto_RSVD_and_B_cost,
                                 # for dealing with adaptable rsvd rank
                                 adaptable_rsvd_rank = args.adaptable_rsvd_rank,
-                                rsvd_target_truncation_rel_err = rsvd_target_truncation_rel_err,
-                                maximum_ever_admissible_rsvd_rank = maximum_ever_admissible_rsvd_rank,
-                                rsvd_adaptive_max_history = rsvd_adaptive_max_history,
-                                rsvd_rank_adaptation_TInv_multiplier = rsvd_rank_adaptation_TInv_multiplier,
+                                rsvd_target_truncation_rel_err = args.rsvd_target_truncation_rel_err,
+                                maximum_ever_admissible_rsvd_rank = args.maximum_ever_admissible_rsvd_rank,
+                                rsvd_adaptive_max_history = args.rsvd_adaptive_max_history,
+                                rsvd_rank_adaptation_TInv_multiplier = args.rsvd_rank_adaptation_TInv_multiplier,
                                 # for dealing with adaptable B rank
                                 adaptable_B_rank = args.adaptable_B_rank,
-                                B_rank_adaptation_T_brand_updt_multiplier = B_rank_adaptation_T_brand_updt_multiplier,
-                                B_target_truncation_rel_err = B_target_truncation_rel_err,
-                                maximum_ever_admissible_B_rank = maximum_ever_admissible_B_rank,    
-                                B_adaptive_max_history = B_adaptive_max_history,
+                                B_rank_adaptation_T_brand_updt_multiplier = args.B_rank_adaptation_T_brand_updt_multiplier,
+                                B_target_truncation_rel_err = args.B_target_truncation_rel_err,
+                                maximum_ever_admissible_B_rank = args.maximum_ever_admissible_B_rank,    
+                                B_adaptive_max_history = args.B_adaptive_max_history,
                                 ### for dealing with the correction (the C in B-R-C)
-                                correction_multiplier_TCov = correction_multiplier_TCov,
-                                brand_corection_dim_frac = brand_corection_dim_frac
-                                )#    optim.SGD(model.parameters(),
-                              #lr=0.01, momentum=0.5) #Your_Optimizer()
+                                correction_multiplier_TCov = args.correction_multiplier_TCov,
+                                brand_corection_dim_frac = args.brand_corection_dim_frac
+                                )#    
+    
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
     print('GPU-rank {} : Done initializing optimizer. Started training...'.format(rank))
