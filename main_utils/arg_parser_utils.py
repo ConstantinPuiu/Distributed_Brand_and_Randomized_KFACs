@@ -24,7 +24,8 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
         else:
             return True
     ############## end helper fct defn #################
-        
+    
+    args.test_at_end = turn_0_1_var_into_T_F(args.test_at_end)    
     if solver_name == 'KFAC':
         args.work_alloc_propto_EVD_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_EVD_cost)
         
@@ -331,6 +332,10 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
     ### for dealing with data path (where the dlded dataset is stored) and dataset itself
     parser.add_argument('--data_root_path', type=str, default = '/data/math-opt-ml/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
     parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: MNIST, cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
+    
+    ### for slecting when / if to do the test() function
+    parser.add_argument('--test_at_end', type=int, default = 0, help='Set to 1 to perform a test at the end of the training' ) 
+    parser.add_argument("--test_every_X_epochs", type = int, default = 10000, help = 'If you want to perform a test more frequently than just at the end. Default set to very high value to avoid. Set to 1 if you wish to test after each epoch.')
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES

@@ -48,24 +48,33 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
     if dataset in ['MNIST', 'cifar10', 'cifar100', 'imagenet']:
-        trainset, testset, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
+        train_set, test_set, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
                                           test_batch_size = batch_size,
                                           collation_fct = collation_fct, root = data_root_path)
     else:
         raise NotImplementedError('dataset = {} is not implemeted'.format(dataset))
         
     partition_sizes = [1.0 / size for _ in range(size)]
-    partition = DataPartitioner(trainset, partition_sizes)
+    
+    ################ partition train set ######################################
+    partition = DataPartitioner(train_set, partition_sizes)
     partition = partition.use(dist.get_rank())
     train_set = torch.utils.data.DataLoader(partition,
                                          batch_size=batch_size,
                                          collate_fn = collation_fct,
                                          shuffle=True)
+    ########### END: partition train set ######################################
     
-    """testset is preprocessed but NOT split over GPUS and currently NOT EVER USED (only blind training is performed).
-    TODO: implement testset stuff and have a TEST at the end of epoch and at the end of training!"""
-    return train_set, testset, batch_size, num_classes
+    ################ partition test set #######################################
+    partition = DataPartitioner(test_set, partition_sizes)
+    partition = partition.use(dist.get_rank())
+    test_set = torch.utils.data.DataLoader(partition,
+                                         batch_size=batch_size,
+                                         collate_fn = collation_fct,
+                                         shuffle=True)
+    ################ END: partition test set ##################################
     
+    return train_set, test_set, batch_size, num_classes
 
 def cleanup():
     dist.destroy_process_group()

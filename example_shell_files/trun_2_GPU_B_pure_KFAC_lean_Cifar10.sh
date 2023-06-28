@@ -28,6 +28,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 #OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/CIFAR10/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epochs 10 --brand_period 5000000000000000 --brand_update_multiplier_to_TCov 5
 #TORCH_DISTRIBUTED_DETAIL=DEBUG NCCL_DEBUG=INFO 
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_pure_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epochs 10 --batch_size 256 \
+--test_at_end 1 --test_every_X_epochs 3 \
 --net_type 'resnet18' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'cifar10' \

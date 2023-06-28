@@ -18,7 +18,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_B_R_kfac_lean_Kf
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
 from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility, adjust_args_for_schedules
 
-from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct
+from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct, train_n_epochs, test
 
 
 def main(world_size, args):
@@ -48,7 +48,11 @@ def main(world_size, args):
 
     print('GPU-rank {} : Partitioning dataset ...'.format(rank))
     t_partition_dset_1 = time.time()
-    train_set, testset, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset, args.batch_size)
+    
+    ############################ Partition data ################################
+    train_set, test_set, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset, args.batch_size)
+    ####################### END : Partition data ###############################
+    
     len_train_set = len(train_set)
     t_partition_dset_2 = time.time()
     print('GPU-rank {} : Done partitioning dataset in {:.2f} s! : len(train_set) = {}'.format(rank, t_partition_dset_2 - t_partition_dset_1, len_train_set))
@@ -66,7 +70,8 @@ def main(world_size, args):
     model = DDP(model, device_ids=[rank], output_device=rank, find_unused_parameters = False)
     print('GPU-rank {} : Done setting up model (neural netowrk)!'.format(rank))
     #################### The above is defined previously
-
+    
+    ###################### OPTIMIZER ##########################################
     print('GPU-rank {} : Initializing optimizer...'.format(rank))
     optimizer =  B_R_KFACOptimizer(model, rank = rank, world_size = world_size, 
                                lr_function = l_rate_function, momentum = args.momentum, stat_decay = args.stat_decay, 
@@ -101,17 +106,14 @@ def main(world_size, args):
                                 maximum_ever_admissible_B_rank = args.maximum_ever_admissible_B_rank,    
                                 B_adaptive_max_history = args.B_adaptive_max_history,
                                 ) #
+    print('GPU-rank {} : Done initializing optimizer. Started training...'.format(rank))
+    ###################### END: OPTIMIZER #####################################
     
     loss_fn = torch.nn.CrossEntropyLoss() #F.nll_loss #Your_Loss() # nn.CrossEntropyLoss()
     # for test loss use: # nn.CrossEntropyLoss(size_average = False)
-    print('GPU-rank {} : Done initializing optimizer. Started training...'.format(rank))
     
-    tstart = time.time()
-    for epoch in range(0, args.n_epochs):
-        # if we are using DistributedSampler, we have to tell it which epoch this is
-        #dataloader.sampler.set_epoch(epoch)
-        
-        ######### setting parameters according to SCHEDULES ###################
+    ############## schedule function ##########################################
+    def schedule_function(optimizer, epoch):
         if epoch in TCov_schedule:
             optimizer.TCov =  TCov_schedule[epoch]
         if epoch in TInv_schedule:
@@ -123,35 +125,19 @@ def main(world_size, args):
             optimizer.B_R_period = B_R_period_schedule[epoch]
         if epoch in KFAC_damping_schedule: 
             optimizer.param_groups[0]['damping'] = KFAC_damping_schedule[epoch]
-        ######### END: setting parameters according to SCHEDULES ##############
-        
-        for jdx, (x,y) in enumerate(train_set):#dataloader):
-            #print('\ntype(x) = {}, x = {}, x.get_device() = {}\n'.format(type(x), x, x.get_device()))
-            optimizer.zero_grad(set_to_none=True)
+    ############## END: schedule function #####################################
 
-            pred = model(x)
-            #label = x['label']
-            if optimizer.steps % optimizer.TCov == 0: #KFAC_matrix_update_frequency == 0:
-                optimizer.acc_stats = True
-            else:
-                optimizer.acc_stats = False
-                
-            try:
-                loss = loss_fn(pred, y)#label)
-            except:
-                print('\ntype(pred) = {}, pred = {}, pred.get_device() = {}\n'.format(type(pred), pred, pred.get_device()))
-                print('\ntype(y) = {}, y = {}, y.get_device() = {}\n'.format(type(y),y, y.get_device()))
-                loss = loss_fn(pred, y)
-            
-            #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
-                
-            loss.backward()
-            if jdx == len_train_set - 1 and epoch == args.n_epochs - 1:
-                tend = time.time()
-                print('TIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(tend-tstart, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', loss: {}\n'.format(str(loss.item())))
-                #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
-                #    f.write('Rank (GPU number) {} at batch {}:'.format(rank, jdx) + str(dist.get_rank())+ ', epoch ' +str(epoch+1) + ', loss: {}\n'.format(str(loss.item())))
-            optimizer.step(epoch_number = epoch + 1, error_savepath = None)
+    ########################## TRAINING LOOP: over epochs ######################################################
+    train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, args, len_train_set, rank, world_size)
+    # how many epochs to train is in args.n_epochs
+    ##################### END : TRAINING LOOP: over epochs ####################################################
+    
+    ####### test at the end of training #####
+    if args.test_at_end == True: 
+        print('Rank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
+        test(test_loader = test_set, model = model, loss_fn = loss_fn, rank = rank, world_size = world_size, epoch = args.n_epochs - 1) 
+    ## END:  test at the end of training ####
+        
     cleanup()
     print('GPU rank = {} of {} is done correctly!'.format(rank, world_size))
 
