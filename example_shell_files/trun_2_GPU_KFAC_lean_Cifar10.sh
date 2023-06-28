@@ -24,6 +24,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 #NCCL_BLOCKING_WAIT=1
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epoch 6 --batch_size 256 \
 --test_at_end 1 --test_every_X_epochs 3 \
+--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
 --net_type 'resnet18' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'cifar10' \

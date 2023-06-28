@@ -122,9 +122,17 @@ def main(world_size, args):
     ############## END: schedule function #####################################
 
     ########################## TRAINING LOOP: over epochs ######################################################
-    train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, args, len_train_set, rank, world_size)
+    stored_metrics_object = train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, 
+                                           args, len_train_set, rank, world_size)
     # how many epochs to train is in args.n_epochs
     ##################### END : TRAINING LOOP: over epochs ####################################################
+    
+    ####### print and save stored metrics #####################################################################
+    if rank == 0 and args.store_and_save_metrics:
+        stored_metrics_object.print_metrics()
+        stored_metrics_object.save_metrics( metrics_save_path = args.metrics_save_path, dataset = args.dataset, 
+                                           net_type = args.net_type, solver_name = 'B' )
+    ####### END : print and save stored metrics ###############################################################
         
     cleanup()
     print('GPU rank = {} of {} is done correctly!'.format(rank, world_size))

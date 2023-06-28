@@ -63,7 +63,7 @@ class Metric:
         return self.accum_val.cpu() / self.n_pts.cpu()
 ############ END: helper class for test funciton ##########################
 
-def test(test_loader, model, loss_fn, rank, world_size, epoch):
+def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_size, epoch, time_to_epoch_end):
     # rank here is the GPU rank (idx of GPU, NOT rsvd rank or anything like that)
     model.eval()
     test_loss = Metric('test_loss', rank)
@@ -88,10 +88,63 @@ def test(test_loader, model, loss_fn, rank, world_size, epoch):
     ta = test_acc.avg(); ta = 100 * ta # display as percentage
     #Test is currently printing. TO DO: store to list and save for future plots
     print('Rank {} / ws = {}. Epoch = {} :  test_loss = {:.5f}, test_accuracy = {:.4f}%\n'.format(rank, world_size, epoch + 1, tl, ta))
-    #return tl, ta
     
+    ##### update and return stored metrics object if required. If not None is returned
+    if args.store_and_save_metrics == True and rank == 0: # do only storing on GPU #0 process (still on CPU to avoid duplicates stored)
+        """ IMPORTANT NOTE: ONLY THE TIME MEASURED by GPU0 is considered"""
+        stored_metrics_object.update_lists({'epoch_number': epoch + 1, 'test_loss': tl , 'test_acc': ta , 'time_to_epoch_end': time_to_epoch_end})
+    else: # else want to return stored_metrics_object = None, but stored_metrics_object is already None in this case, so passing
+        pass 
+    #return tl, ta
+    return stored_metrics_object
+
+################ helper class for storing metrics #############################
+class stored_metrics:
+    def __init__(self, metrics_list):
+        # metrics_list is a list of strings
+        self.metrics_dict = {} # possible keys: 'test_loss', 'test_acc', 'time_to_epoch'
+        for metr in metrics_list:
+            self.metrics_dict[metr] = []
+    
+    def update_lists(self, metrics_to_update_dict):# run as  for eg stored_metrics_bject.update_lists({'test_loss': 0.02 , 'test_acc': 99.4 , 'time_to_epoch': 1})
+        #metrics_to_update_dict is of form key (metric, i.e. test acc): value
+        for metr in metrics_to_update_dict.keys():
+            self.metrics_dict[metr].append(metrics_to_update_dict[metr])
+    
+    def save_metrics(self, metrics_save_path, dataset, net_type, solver_name):
+        # get date ###########################################
+        import os
+        from datetime import datetime
+        date_time_now = datetime.now()
+        date_now = str(date_time_now.date())
+        ######################################################
+        # make a dir with today's date if not already exists ################################
+        metrics_save_path = metrics_save_path + '/' + date_now
+        if os.path.exists(metrics_save_path):
+            pass # if the path already exists then do nothing
+        else: # if it doesnt exist, create it
+            os.mkdir(metrics_save_path)
+        ######################################################################################
+        for metr in self.metrics_dict:
+            torch.save(obj = self.metrics_dict[metr], f = metrics_save_path + '/{}_{}_{}_{}_{}.pt'.format( dataset, net_type, solver_name, metr, date_time_now) )
+    
+    def print_metrics(self):
+        for metr in self.metrics_dict:
+            print('Metric {}, data: {}\n'.format(metr, self.metrics_dict[metr]))
+################ END: helper class for storing metrics ########################
+
 def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, args, len_train_set, rank, world_size):
+    # function returns stored_metrics_object # stored_metrics_object is None if we do not store metrics
     # args contains how many epchs to train
+    
+    ####### initialize object to store metrics if required ################
+    if args.store_and_save_metrics == True and rank == 0:
+        # initialize stored_metrics_object
+        stored_metrics_object = stored_metrics(['epoch_number' , 'test_loss' , 'test_acc' , 'time_to_epoch_end'])
+    else:
+        stored_metrics_object = None
+    ####### initialize object to store metrics if required ################
+         
     total_time = 0
     ########################## TRAINING LOOP: over epochs ######################################################
     for epoch in range(0, args.n_epochs):
@@ -131,7 +184,10 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
         if ((epoch + 1) % args.test_every_X_epochs) == 0:   
             if ( epoch + 1 < args.n_epochs ) or ( args.test_at_end == False): # if we were gonna test at the end and this is the final epoch, don't test here to avoid duplicates
                 print('Rank = {}. Testing at epoch = {}... \n'.format(rank, epoch + 1))
-                test(test_loader = test_set, model = model, loss_fn = loss_fn, rank = rank, world_size = world_size, epoch = epoch) 
+                stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
+                                             stored_metrics_object = stored_metrics_object, 
+                                             rank = rank, world_size = world_size, epoch = epoch,
+                                             time_to_epoch_end = total_time) 
                 model.train() # put model back into training mode
         ############ END: test every few epochs during training ###############
     
@@ -142,5 +198,10 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
     ####### test at the end of training #####
     if args.test_at_end == True: 
         print('Rank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
-        test(test_loader = test_set, model = model, loss_fn = loss_fn, rank = rank, world_size = world_size, epoch = args.n_epochs - 1) 
+        stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
+                                     stored_metrics_object = stored_metrics_object,
+                                     rank = rank, world_size = world_size, epoch = args.n_epochs - 1,
+                                     time_to_epoch_end = total_time) 
     ## END:  test at the end of training ####    
+    
+    return stored_metrics_object
