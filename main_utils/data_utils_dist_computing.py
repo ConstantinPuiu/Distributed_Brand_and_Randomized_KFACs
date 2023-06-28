@@ -3,7 +3,7 @@ import random as rng
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from torchvision.datasets import ImageFolder
+#from torchvision.datasets import ImageFolder
 
 ##############################################################################
 ############ Dataset partition functions #####################################
@@ -25,11 +25,10 @@ class Partition(object):
 
 class DataPartitioner(object):
 
-    def __init__(self, data, sizes=[0.7, 0.2, 0.1], seed=1234):
+    def __init__(self, data, sizes=[0.7, 0.2, 0.1]):
         self.data = data
         self.partitions = []
         #rng = Random()
-        rng.seed(seed)
         data_len = len(data)
         indexes = [x for x in range(0, data_len)]
         rng.shuffle(indexes)
@@ -44,7 +43,7 @@ class DataPartitioner(object):
 
 ''' use as'''
 """ Partitioning dataset """
-def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
+def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed = -1):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
     if dataset in ['MNIST', 'cifar10', 'cifar100', 'imagenet']:
@@ -56,6 +55,19 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size):
         
     partition_sizes = [1.0 / size for _ in range(size)]
     
+    ########### set seed ###########
+    if seed == -1: # if seed is -1 do not seed
+        pass
+    else:
+        rng.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        # torch.use_deterministic_algorithms(True)  # set ALL CUDA operations to deterministic
+        # ideally we use this one instead of the one below, but have issues taht some random algorithms for CUDA cannot be made deterministic
+        torch.backends.cudnn.deterministic=True # set all CUDA-Conv operations to deterministic
+        
+    ########### END: set seed ######
+        
     ################ partition train set ######################################
     partition = DataPartitioner(train_set, partition_sizes)
     partition = partition.use(dist.get_rank())

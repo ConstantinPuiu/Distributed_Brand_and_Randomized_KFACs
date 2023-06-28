@@ -343,6 +343,9 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
     parser.add_argument('--store_and_save_metrics', type=int, default = 0, help='Set to 1 to store metrics acquired during train and test' ) 
     parser.add_argument('--metrics_save_path', type=str, default = '/data/math-opt-ml/saved_metrics/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
     
+    ### for seeding rng
+    parser.add_argument('--seed', type=int, default = -1 , help='Set to -1 to avoid seeding. Otherwise seed at given number' ) 
+    
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
     parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/KFAC_schedules.py' ) 

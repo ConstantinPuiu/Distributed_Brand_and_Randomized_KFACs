@@ -46,7 +46,9 @@ def main(world_size, args):
     t_partition_dset_1 = time.time()
     
     ############################ Partition data ################################
-    train_set, test_set, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset, args.batch_size)
+    train_set, test_set, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset,
+                                                              args.batch_size, seed = args.seed)
+    # NOTE: seeding of random, torch, and torch.cuda is done inside partition_dataset() call
     ####################### END : Partition data ###############################
     
     len_train_set = len(train_set)

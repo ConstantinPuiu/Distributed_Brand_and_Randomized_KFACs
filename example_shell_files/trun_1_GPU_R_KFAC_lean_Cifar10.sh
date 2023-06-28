@@ -23,6 +23,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 #mpiexec python ./attempt_4_GPUs_naive_KFAC.py
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1  --n_epoch 5 --batch_size 256 \
 --test_at_end 1 --test_every_X_epochs 3 \
+--seed 12345 \
 --store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
 --net_type 'resnet18' \
 --data_root_path '/data/math-opt-ml/' \
