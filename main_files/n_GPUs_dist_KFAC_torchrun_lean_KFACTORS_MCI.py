@@ -92,12 +92,6 @@ def main(world_size, args):
     train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, args, len_train_set, rank, world_size)
     # how many epochs to train is in args.n_epochs
     ##################### END : TRAINING LOOP: over epochs ####################################################
-    
-    ####### test at the end of training #####
-    if args.test_at_end == True: 
-        print('Rank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
-        test(test_loader = test_set, model = model, loss_fn = loss_fn, rank = rank, world_size = world_size, epoch = args.n_epochs - 1) 
-    ## END:  test at the end of training ####
         
     cleanup()
     print('GPU rank = {} of {} is done correctly!'.format(rank, world_size))

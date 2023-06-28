@@ -137,4 +137,10 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
     
     ##################### END : TRAINING LOOP: over epochs ####################################################
     
-    print('TIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n'.format(loss.item()))    
+    print('TIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n'.format(loss.item()))
+
+    ####### test at the end of training #####
+    if args.test_at_end == True: 
+        print('Rank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
+        test(test_loader = test_set, model = model, loss_fn = loss_fn, rank = rank, world_size = world_size, epoch = args.n_epochs - 1) 
+    ## END:  test at the end of training ####    
