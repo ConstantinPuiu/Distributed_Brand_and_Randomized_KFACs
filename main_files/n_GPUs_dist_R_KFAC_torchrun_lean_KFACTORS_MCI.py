@@ -121,7 +121,7 @@ def main(world_size, args):
     ####### END : print and save stored metrics ###############################################################
     
     cleanup()
-    print('GPU rank = {} of {} is done correctly!'.format(rank, world_size))
+    print('GPU rank = {} of {} is done correctly!'.format(rank, world_size) + '\nFINISHED AT: = {} \n\n'.format(datetime.now()))
 
 if __name__ == '__main__':
     # suppose we have 3 gpus
@@ -139,7 +139,6 @@ if __name__ == '__main__':
     main(world_size, args)
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nFINISHED AT: = {} \n\n'.format(datetime.now()))
-    print('\nFINISHED AT: = {} \n\n'.format(datetime.now()))
 
 
 
