@@ -1,6 +1,7 @@
 import torch
 import torch.distributed as dist
 import time
+from tqdm import tqdm
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile_CIFAR_10 import get_network
 import torchvision.models as torchVmodels
@@ -69,21 +70,32 @@ def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_s
     test_loss = Metric('test_loss', rank)
     test_acc = Metric('test_acc', rank)
     
-    with torch.no_grad():
-        for idx, (x, y_target) in enumerate(test_loader): # each GPU has it's own test loader
-            y_pred = model(x)
-            current_bsz = y_target.shape[0] # making sure leftover batches (i.e. a batch of 190 when bs = 256 is accounted for correctly)
-            
-            #### loss sum-over_pts-in-batch computation
-            loss_increment = loss_fn(y_pred, y_target) * current_bsz #loss fct returns average over batch and we want sum, hence the multiplication with current_bsz
-            
-            #number of correct pts computation (for test-acc)
-            pred = y_pred.data.max(1, keepdim=True)[1]
-            acc_increment = pred.eq(y_target.data.view_as(pred)).sum() # acc increment is just the number of correctly classified pts
-            
-            # update metrics
-            test_loss.update(new_val = loss_increment, new_n_pts = current_bsz)
-            test_acc.update(new_val = acc_increment, new_n_pts = current_bsz)
+    len_test_loader = len(test_loader)
+    with tqdm(
+        total = len_test_loader,
+        bar_format='{l_bar}{bar:10}|{postfix}',
+        desc='\nTesting at epoch {} [in {} iterations].'.format(epoch + 1, len_test_loader),
+        disable = (not args.print_tqdm_progress_bar) or (rank != 1), # only rank1 will be verbose
+        miniters = int(len_test_loader / 2)
+    ) as t:
+        with torch.no_grad():
+            for idx, (x, y_target) in enumerate(test_loader): # each GPU has it's own test loader
+                y_pred = model(x)
+                current_bsz = y_target.shape[0] # making sure leftover batches (i.e. a batch of 190 when bs = 256 is accounted for correctly)
+                
+                #### loss sum-over_pts-in-batch computation
+                loss_increment = loss_fn(y_pred, y_target) * current_bsz #loss fct returns average over batch and we want sum, hence the multiplication with current_bsz
+                
+                #number of correct pts computation (for test-acc)
+                pred = y_pred.data.max(1, keepdim=True)[1]
+                acc_increment = pred.eq(y_target.data.view_as(pred)).sum() # acc increment is just the number of correctly classified pts
+                
+                # update metrics
+                test_loss.update(new_val = loss_increment, new_n_pts = current_bsz)
+                test_acc.update(new_val = acc_increment, new_n_pts = current_bsz)
+                
+                # update tqdm progress bar
+                t.update(1)
     tl = test_loss.avg()    
     ta = test_acc.avg(); ta = 100 * ta # display as percentage
     #Test is currently printing. TO DO: store to list and save for future plots
@@ -147,57 +159,66 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
          
     total_time = 0
     ########################## TRAINING LOOP: over epochs ######################################################
-    for epoch in range(0, args.n_epochs):
-        tstart = time.time()
-        # if we are using DistributedSampler, we have to tell it which epoch this is
-        #dataloader.sampler.set_epoch(epoch)
-        
-        ######### setting parameters according to SCHEDULES ###################
-        schedule_function(optimizer, epoch)
-        ######### END: setting parameters according to SCHEDULES ##############
-        
-        ################### TRAINING LOOP: over batches #######################
-        for jdx, (x,y) in enumerate(train_set):#dataloader):
-            #print('\ntype(x) = {}, x = {}, x.get_device() = {}\n'.format(type(x), x, x.get_device()))
-            optimizer.zero_grad(set_to_none=True)
-
-            pred = model(x)
-            #label = x['label']
-            if optimizer.steps % optimizer.TCov == 0: #KFAC_matrix_update_frequency == 0:
-                optimizer.acc_stats = True
-            else:
-                optimizer.acc_stats = False
-                
-            loss = loss_fn(pred, y)#label)
+    with tqdm(
+        total = args.n_epochs,
+        bar_format='{l_bar}{bar:10}|{postfix}',
+        desc='\nTraining a total of {} epochs.'.format(args.n_epochs),
+        disable =  (not args.print_tqdm_progress_bar) or (rank != 1), # only rank1 will be verbose
+    ) as t:
+        for epoch in range(0, args.n_epochs):
+            tstart = time.time()
+            # if we are using DistributedSampler, we have to tell it which epoch this is
+            #dataloader.sampler.set_epoch(epoch)
             
-            #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
+            ######### setting parameters according to SCHEDULES ###################
+            schedule_function(optimizer, epoch)
+            ######### END: setting parameters according to SCHEDULES ##############
+            
+            ################### TRAINING LOOP: over batches #######################
+            for jdx, (x,y) in enumerate(train_set):#dataloader):
+                #print('\ntype(x) = {}, x = {}, x.get_device() = {}\n'.format(type(x), x, x.get_device()))
+                optimizer.zero_grad(set_to_none=True)
+    
+                pred = model(x)
+                #label = x['label']
+                if optimizer.steps % optimizer.TCov == 0: #KFAC_matrix_update_frequency == 0:
+                    optimizer.acc_stats = True
+                else:
+                    optimizer.acc_stats = False
+                    
+                loss = loss_fn(pred, y)#label)
                 
-            loss.backward()
-                #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
-                #    f.write('Rank (GPU number) {} at batch {}:'.format(rank, jdx) + str(dist.get_rank())+ ', epoch ' +str(epoch+1) + ', loss: {}\n'.format(str(loss.item())))
-            optimizer.step(epoch_number = epoch + 1, error_savepath = None)
-        ################ END:  TRAINING LOOP: over batches ####################
-        
-        tend = time.time(); total_time += (tend- tstart)
-        
-        ############ test every few epochs during training ####################
-        if ((epoch + 1) % args.test_every_X_epochs) == 0:   
-            if ( epoch + 1 < args.n_epochs ) or ( args.test_at_end == False): # if we were gonna test at the end and this is the final epoch, don't test here to avoid duplicates
-                print('Rank = {}. Testing at epoch = {}... \n'.format(rank, epoch + 1))
-                stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
-                                             stored_metrics_object = stored_metrics_object, 
-                                             rank = rank, world_size = world_size, epoch = epoch,
-                                             time_to_epoch_end = total_time) 
-                model.train() # put model back into training mode
-        ############ END: test every few epochs during training ###############
+                #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
+                    
+                loss.backward()
+                    #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
+                    #    f.write('Rank (GPU number) {} at batch {}:'.format(rank, jdx) + str(dist.get_rank())+ ', epoch ' +str(epoch+1) + ', loss: {}\n'.format(str(loss.item())))
+                optimizer.step(epoch_number = epoch + 1, error_savepath = None)
+            ################ END:  TRAINING LOOP: over batches ####################
+            
+            #### end epoch-time measurement
+            tend = time.time(); total_time += (tend- tstart)
+            #####update tqdm
+            t.update(1)
+            
+            ############ test every few epochs during training ####################
+            if ((epoch + 1) % args.test_every_X_epochs) == 0:   
+                if ( epoch + 1 < args.n_epochs ) or ( args.test_at_end == False): # if we were gonna test at the end and this is the final epoch, don't test here to avoid duplicates
+                    print('\nRank = {}. Testing at epoch = {}... \n'.format(rank, epoch + 1))
+                    stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
+                                                 stored_metrics_object = stored_metrics_object, 
+                                                 rank = rank, world_size = world_size, epoch = epoch,
+                                                 time_to_epoch_end = total_time) 
+                    model.train() # put model back into training mode
+            ############ END: test every few epochs during training ###############
     
     ##################### END : TRAINING LOOP: over epochs ####################################################
     
-    print('TIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n'.format(loss.item()))
+    print('\nTIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n'.format(loss.item()))
 
     ####### test at the end of training #####
     if args.test_at_end == True: 
-        print('Rank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
+        print('\nRank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
         stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
                                      stored_metrics_object = stored_metrics_object,
                                      rank = rank, world_size = world_size, epoch = args.n_epochs - 1,

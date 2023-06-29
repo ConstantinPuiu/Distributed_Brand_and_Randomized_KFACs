@@ -27,6 +27,7 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
     
     args.test_at_end = turn_0_1_var_into_T_F(args.test_at_end)
     args.store_and_save_metrics = turn_0_1_var_into_T_F(args.store_and_save_metrics)
+    args.print_tqdm_progress_bar = turn_0_1_var_into_T_F(args.print_tqdm_progress_bar)
     
     if solver_name == 'KFAC':
         args.work_alloc_propto_EVD_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_EVD_cost)
@@ -345,6 +346,9 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
     
     ### for seeding rng
     parser.add_argument('--seed', type=int, default = -1 , help='Set to -1 to avoid seeding. Otherwise seed at given number' ) 
+    
+    ### for choosing whether we have tqdm or not - might chage it later and integrate with some "verbose"-"nonverbose" choise and include the prints too
+    parser.add_argument('--print_tqdm_progress_bar', type=int, default = 0, help='Set to 0 NOT to print TQDM progress bars. Anything other than 0 will print progress bars' ) 
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
