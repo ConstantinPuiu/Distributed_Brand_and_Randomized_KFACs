@@ -55,20 +55,53 @@ class Metric:
         # note taht no worldsize is required as this is implicitly included in the allreducing of n_pts
     
     def update(self, new_val, new_n_pts):
-        self.accum_val += new_val
-        self.n_pts += new_n_pts
+        with torch.no_grad():
+            self.accum_val += new_val
+            self.n_pts += new_n_pts
     
     def avg(self):
         dist.all_reduce(self.accum_val, async_op=False)
         dist.all_reduce(self.n_pts, async_op=False)
         return self.accum_val.cpu() / self.n_pts.cpu()
+    
+    def zero_out(self): # zero out - used for trianing metrics only to restart them rather than re-initialize at each epoch
+        self.accum_val.zero_()
+        self.n_pts.zero_()
 ############ END: helper class for test funciton ##########################
 
-def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_size, epoch, time_to_epoch_end):
+###############################################################################
+################## helpers for easily running metric objects ##################
+###############################################################################
+def update_acc_and_loss_obj( loss_metric_obj, acc_metric_obj, loss_fn, y_pred, y_target, loss_increment_raw = None):
+    current_bsz = y_target.shape[0] # making sure leftover batches (i.e. a batch of 190 when bs = 256 is accounted for correctly)
+    
+    #### loss sum-over_pts-in-batch computation
+    if loss_increment_raw == None: # allowing the possibility to bypass having to call the loss fct again in case we called it outside this function
+        #loss_increment_raw is meant to be exactly loss_fn(y_pred, y_target) called outside
+        loss_increment = loss_fn(y_pred, y_target) * current_bsz #loss fct returns average over batch and we want sum, hence the multiplication with current_bsz
+    else:
+        loss_increment = loss_increment_raw * current_bsz
+    
+    #number of correct pts computation (for test-acc)
+    acc_increment = compute_n_correct_predictions(y_pred, y_target) # acc increment is just the number of correctly classified pts
+    
+    # update metrics
+    loss_metric_obj.update(new_val = loss_increment, new_n_pts = current_bsz)
+    acc_metric_obj.update(new_val = acc_increment, new_n_pts = current_bsz)
+
+############ helper function for computing accuracy ###########################
+def compute_n_correct_predictions(y_pred, y_target):
+    pred = y_pred.data.max(1, keepdim=True)[1]
+    return pred.eq(y_target.data.view_as(pred)).sum()
+############ END : helper function for computing accuracy #####################
+
+###############################################################################
+############ END: helpers for easily running metric objects ###################
+###############################################################################
+    
+def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_size, epoch, time_to_epoch_end_test, test_loss_obj, test_acc_obj):
     # rank here is the GPU rank (idx of GPU, NOT rsvd rank or anything like that)
     model.eval()
-    test_loss = Metric('test_loss', rank)
-    test_acc = Metric('test_acc', rank)
     
     len_test_loader = len(test_loader)
     with tqdm(
@@ -81,36 +114,33 @@ def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_s
         with torch.no_grad():
             for idx, (x, y_target) in enumerate(test_loader): # each GPU has it's own test loader
                 y_pred = model(x)
-                current_bsz = y_target.shape[0] # making sure leftover batches (i.e. a batch of 190 when bs = 256 is accounted for correctly)
                 
-                #### loss sum-over_pts-in-batch computation
-                loss_increment = loss_fn(y_pred, y_target) * current_bsz #loss fct returns average over batch and we want sum, hence the multiplication with current_bsz
-                
-                #number of correct pts computation (for test-acc)
-                pred = y_pred.data.max(1, keepdim=True)[1]
-                acc_increment = pred.eq(y_target.data.view_as(pred)).sum() # acc increment is just the number of correctly classified pts
-                
-                # update metrics
-                test_loss.update(new_val = loss_increment, new_n_pts = current_bsz)
-                test_acc.update(new_val = acc_increment, new_n_pts = current_bsz)
+                ##### update loss and acc metric objects ##########
+                update_acc_and_loss_obj( loss_metric_obj = test_loss_obj, acc_metric_obj = test_acc_obj,
+                                        loss_fn = loss_fn, y_pred = y_pred, y_target = y_target)
                 
                 # update tqdm progress bar
                 t.update(1)
-    tl = test_loss.avg()    
-    ta = test_acc.avg(); ta = 100 * ta # display as percentage
+    tl = test_loss_obj.avg()    
+    ta = test_acc_obj.avg(); ta = 100 * ta # display as percentage
     #Test is currently printing. TO DO: store to list and save for future plots
-    print('Rank {} / ws = {}. Epoch = {} :  test_loss = {:.5f}, test_accuracy = {:.4f}%\n'.format(rank, world_size, epoch + 1, tl, ta))
+    print('\nRank {} / ws = {}. Epoch = {} :  test_loss = {:.5f}, test_accuracy = {:.4f}%\n'.format(rank, world_size, epoch + 1, tl, ta))
     
     ##### update and return stored metrics object if required. If not None is returned
     if args.store_and_save_metrics == True and rank == 0: # do only storing on GPU #0 process (still on CPU to avoid duplicates stored)
-        """ IMPORTANT NOTE: ONLY THE TIME MEASURED by GPU0 is considered"""
-        stored_metrics_object.update_lists({'epoch_number': epoch + 1, 'test_loss': tl , 'test_acc': ta , 'time_to_epoch_end': time_to_epoch_end})
+        """ IMPORTANT NOTE: ONLY THE TIME MEASURED by GPU0 is considered
+        But the all-reduced test-acc and test-loss is considered (all reduce hidden in .avg() method"""
+        stored_metrics_object.update_lists({'epoch_number_test': epoch + 1, 'test_loss': tl , 'test_acc': ta , 'time_to_epoch_end_test': time_to_epoch_end_test})
     else: # else want to return stored_metrics_object = None, but stored_metrics_object is already None in this case, so passing
         pass 
+    ########### zero out test metric objects to have them fresh at the beginning of bext test
+    test_loss_obj.zero_out()
+    test_acc_obj.zero_out()    
+    
     #return tl, ta
     return stored_metrics_object
 
-################ helper class for storing metrics #############################
+################ helper class for storing metrics  (all in 1 object ########### =========================================
 class stored_metrics:
     def __init__(self, metrics_list):
         # metrics_list is a list of strings
@@ -123,7 +153,7 @@ class stored_metrics:
         for metr in metrics_to_update_dict.keys():
             self.metrics_dict[metr].append(metrics_to_update_dict[metr])
     
-    def save_metrics(self, metrics_save_path, dataset, net_type, solver_name):
+    def save_metrics(self, metrics_save_path, dataset, net_type, solver_name, run_seed):
         # get date ###########################################
         import os
         from datetime import datetime
@@ -138,12 +168,12 @@ class stored_metrics:
             os.mkdir(metrics_save_path)
         ######################################################################################
         for metr in self.metrics_dict:
-            torch.save(obj = self.metrics_dict[metr], f = metrics_save_path + '/{}_{}_{}_{}_{}.pt'.format( dataset, net_type, solver_name, metr, date_time_now) )
+            torch.save(obj = self.metrics_dict[metr], f = metrics_save_path + '/{}_{}_{}_{}_{}.pt'.format( dataset, net_type, solver_name, metr, run_seed) )
     
     def print_metrics(self):
         for metr in self.metrics_dict:
             print('Metric {}, data: {}\n'.format(metr, self.metrics_dict[metr]))
-################ END: helper class for storing metrics ########################
+################ END: helper class for storing metrics ######################## =========================================
 
 def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, args, len_train_set, rank, world_size):
     # function returns stored_metrics_object # stored_metrics_object is None if we do not store metrics
@@ -152,12 +182,21 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
     ####### initialize object to store metrics if required ################
     if args.store_and_save_metrics == True and rank == 0:
         # initialize stored_metrics_object
-        stored_metrics_object = stored_metrics(['epoch_number' , 'test_loss' , 'test_acc' , 'time_to_epoch_end'])
+        stored_metrics_object = stored_metrics(['epoch_number_train' , 'train_loss' , 'train_acc' , 'time_to_epoch_end_train',
+                                                'epoch_number_test', 'test_loss' , 'test_acc' , 'time_to_epoch_end_test'])
     else:
         stored_metrics_object = None
     ####### initialize object to store metrics if required ################
          
     total_time = 0
+    
+    ########### iniitalize Metric objects #####################################
+    train_loss_obj = Metric('train_loss', rank)
+    train_acc_obj = Metric('train_acc', rank)
+    test_loss_obj = Metric('test_loss', rank)
+    test_acc_obj = Metric('test_acc', rank)
+    ########### END: iniitalize Metric objects ################################
+
     ########################## TRAINING LOOP: over epochs ######################################################
     with tqdm(
         total = args.n_epochs,
@@ -188,6 +227,10 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
                     
                 loss = loss_fn(pred, y)#label)
                 
+                ##### update loss and acc metric objects ##########
+                update_acc_and_loss_obj( loss_metric_obj = train_loss_obj, acc_metric_obj = train_acc_obj,
+                                        loss_fn = loss_fn, y_pred = pred, y_target = y, 
+                                        loss_increment_raw = loss)
                 #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
                     
                 loss.backward()
@@ -198,6 +241,27 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
             
             #### end epoch-time measurement
             tend = time.time(); total_time += (tend- tstart)
+            
+            ############# all-reduce, store, and save training metric objects ################
+            train_l = train_loss_obj.avg()    
+            train_a = train_acc_obj.avg(); train_a = 100 * train_a # display as percentage
+            #Test is currently printing. TO DO: store to list and save for future plots
+            print('\nRank {} / ws = {}. Epoch = {} :  train_loss = {:.5f}, train_accuracy = {:.4f}%\n'.format(rank, world_size, epoch + 1, train_l, train_a))
+            
+            ##### update and return stored metrics object if required. If not None is returned
+            if args.store_and_save_metrics == True and rank == 0: # do only storing on GPU #0 process (still on CPU to avoid duplicates stored)
+                """ IMPORTANT NOTE: ONLY THE TIME MEASURED by GPU0 is considered
+                But the all-reduced train-acc and train-loss is considered (all reduce hidden in .avg() method
+                Further note that the train metrics are the averga over the entire epoch, so might be slightly stale as compared to en-dof-epoch results"""
+                stored_metrics_object.update_lists({'epoch_number_train': epoch + 1, 'train_loss': train_l , 'train_acc': train_a ,
+                                                    'time_to_epoch_end_train': total_time})
+            else: # else want to return stored_metrics_object = None, but stored_metrics_object is already None in this case, so passing
+                pass 
+            ########### zero out test metric objects to have them fresh at the beginning of bext test
+            train_loss_obj.zero_out()
+            train_acc_obj.zero_out()    
+            ############# END: all-reduce, store, and save training metric objects ###########
+            
             #####update tqdm
             t.update(1)
             
@@ -208,13 +272,14 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
                     stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
                                                  stored_metrics_object = stored_metrics_object, 
                                                  rank = rank, world_size = world_size, epoch = epoch,
-                                                 time_to_epoch_end = total_time) 
+                                                 time_to_epoch_end_test = total_time,
+                                                 test_loss_obj = test_loss_obj, test_acc_obj = test_acc_obj) 
                     model.train() # put model back into training mode
             ############ END: test every few epochs during training ###############
     
     ##################### END : TRAINING LOOP: over epochs ####################################################
     
-    print('\nTIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n'.format(loss.item()))
+    print('\n!!!\nTIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n!!!\n'.format(loss.item()))
 
     ####### test at the end of training #####
     if args.test_at_end == True: 
@@ -222,7 +287,8 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
         stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
                                      stored_metrics_object = stored_metrics_object,
                                      rank = rank, world_size = world_size, epoch = args.n_epochs - 1,
-                                     time_to_epoch_end = total_time) 
+                                     time_to_epoch_end_test = total_time, 
+                                     test_loss_obj = test_loss_obj, test_acc_obj = test_acc_obj) 
     ## END:  test at the end of training ####    
     
     return stored_metrics_object

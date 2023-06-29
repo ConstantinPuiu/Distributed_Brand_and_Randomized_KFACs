@@ -100,7 +100,7 @@ def main(world_size, args):
     if rank == 0 and args.store_and_save_metrics:
         stored_metrics_object.print_metrics()
         stored_metrics_object.save_metrics( metrics_save_path = args.metrics_save_path, dataset = args.dataset, 
-                                           net_type = args.net_type, solver_name = 'KFAC' )
+                                           net_type = args.net_type, solver_name = 'KFAC', run_seed = args.seed )
     ####### END : print and save stored metrics ###############################################################
         
     cleanup()
