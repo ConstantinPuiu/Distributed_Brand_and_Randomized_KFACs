@@ -10,9 +10,9 @@ import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
 #sys.path.append('/home/chri5570/Distributed_Brand_and_Randomized_KFACs/') 
 
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import (ComputeCovA, ComputeCovG)
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import update_running_stat
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils_for_vgg16_bn import fct_split_list_of_modules
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils import (ComputeCovA, ComputeCovG)
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils import update_running_stat
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils import fct_split_list_of_modules
 
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.Brand_S_subroutine import Brand_S_update, Brand_S_update_truncate_before_invapplic
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping, RSVD_lowrank)
