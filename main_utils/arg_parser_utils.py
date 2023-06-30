@@ -74,7 +74,7 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
         args.net_type = 'Simple_net_for_MNIST'
     else:
         if args.net_type == 'Simple_net_for_MNIST':
-            print('args.net_type = Simple_net_for_MNIST is only possible when dataset = MNIST. Changing to default net: VGG16_bn_lmxp')
+            print('args.net_type = Simple_net_for_MNIST is only possible when args.dataset == MNIST, but args.dataset is {}. Changing args.net_type to default: VGG16_bn_lmxp'.format(args.dataset))
             args.net_type = 'VGG16_bn_lmxp'
     # ===================================================================================
         
@@ -334,7 +334,7 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
     
     ### for dealing with data path (where the dlded dataset is stored) and dataset itself
     parser.add_argument('--data_root_path', type=str, default = '/data/math-opt-ml/', help = 'fill with path to download data at that root path. Note that you do not need to change this based on the dataset, it will change automatically: each dataset will have its sepparate folder witin the root_data_path directory!' )
-    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: MNIST, cifar10, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
+    parser.add_argument('--dataset', type=str, default = 'cifar10', help = 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet. Case sensitive! Anything else will throw an error. Using imagenet with resnet##_corrected net will force the net to turn to resnet##.' )
     
     ### for slecting when / if to do the test() function
     parser.add_argument('--test_at_end', type=int, default = 0, help='Set to 1 to perform a test at the end of the training' ) 

@@ -46,7 +46,7 @@ class DataPartitioner(object):
 def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed = -1):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
-    if dataset in ['MNIST', 'cifar10', 'cifar100', 'imagenet']:
+    if dataset in ['MNIST', 'SVHN', 'cifar10', 'cifar100', 'imagenet']:
         train_set, test_set, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
                                           test_batch_size = batch_size,
                                           collation_fct = collation_fct, root = data_root_path)
@@ -99,15 +99,19 @@ def get_transforms(dataset):
     transform_train = None
     transform_test = None
     if dataset == 'MNIST':
-        transform_train = transforms.Compose([
-                                 transforms.ToTensor(),
-                                 transforms.Normalize((0.1307,), (0.3081,))
-                             ])
-        transform_test = transforms.Compose([
-                                 transforms.ToTensor(),
-                                 transforms.Normalize((0.1307,), (0.3081,))
-                             ])
-        
+        transform_train = transforms.Compose([  transforms.ToTensor(),
+                                transforms.Normalize((0.1307,), (0.3081,))  ])
+        transform_test = transforms.Compose([ transforms.ToTensor(),
+                                transforms.Normalize((0.1307,), (0.3081,))  ])
+    elif dataset == 'SVHN':
+        transform_train = transforms.Compose([  transforms.Pad(padding=2),
+                                                transforms.RandomCrop(size=(32, 32)),
+                                                transforms.ColorJitter(brightness=63. / 255., saturation=[0.5, 1.5], contrast=[0.2, 1.8]),
+                                                transforms.ToTensor()
+                                            ])
+        transform_test = transforms.Compose([  transforms.ToTensor(),
+                                transforms.Normalize((0.4376821, 0.4437697, 0.47280442), (0.19803012, 0.20101562, 0.19703614))  ])
+    
     elif dataset == 'cifar10':
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
@@ -176,6 +180,9 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
     if dataset == 'MNIST':
         trainset = torchvision.datasets.MNIST(root=root, train=True, download=True, transform=transform_train)
         testset = torchvision.datasets.MNIST(root=root, train=False, download=True, transform=transform_test)
+    elif dataset == 'SVHN':
+        trainset = torchvision.datasets.SVHN(root=root, split = 'train', download=True, transform=transform_train)
+        testset = torchvision.datasets.SVHN(root=root, split = 'test', download=True, transform=transform_test)
     elif dataset == 'cifar10':
         trainset = torchvision.datasets.CIFAR10(root=root, train=True, download=True, transform=transform_train)
         testset = torchvision.datasets.CIFAR10(root=root, train=False, download=True, transform=transform_test)
@@ -202,5 +209,9 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
 
     assert trainset is not None and testset is not None, 'Error, no dataset %s' % dataset
     
-    num_classes = len(trainset.classes)
+    #### get number of classes
+    if dataset == 'SVHN': #SVHN object does not have a ".classes" attribute
+        num_classes = 10
+    else:
+        num_classes = len(trainset.classes)
     return trainset, testset, num_classes
