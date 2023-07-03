@@ -32,6 +32,7 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri
 --net_type 'FC_CIFAR10' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'cifar10' \
+--TInv_period 100 --TCov_period 20 \
 --B_truncate_before_inversion 1 \
 --adaptable_rsvd_rank 1 --rsvd_rank_adaptation_TInv_multiplier 1 \
 --adaptable_B_rank 1 --B_rank_adaptation_T_brand_updt_multiplier 1 \

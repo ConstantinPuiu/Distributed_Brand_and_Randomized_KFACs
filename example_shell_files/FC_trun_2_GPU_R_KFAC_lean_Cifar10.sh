@@ -31,4 +31,5 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri
 --net_type 'FC_CIFAR10' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'cifar10' \
+--TInv_period 100 --TCov_period 20 \
 --TInv_schedule_flag 0 --TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0

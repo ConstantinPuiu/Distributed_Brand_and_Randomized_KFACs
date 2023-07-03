@@ -29,6 +29,7 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 2 --nproc_per_node=4 /home/chri
 --net_type 'resnet50' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'imagenet' \
+--TInv_period 100 --TCov_period 20 \
 --work_alloc_propto_EVD_cost 1 \
 --TInv_schedule_flag 0 --TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0
 

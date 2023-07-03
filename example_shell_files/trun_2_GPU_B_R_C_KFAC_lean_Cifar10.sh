@@ -29,6 +29,7 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri
 --net_type 'resnet18' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'cifar10' \
+--TInv_period 100 --TCov_period 20 \
 --brand_update_multiplier_to_TCov 1 \
 --B_R_period 5 \
 --B_truncate_before_inversion 1 \
