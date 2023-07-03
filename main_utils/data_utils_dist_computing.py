@@ -46,7 +46,7 @@ class DataPartitioner(object):
 def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed = -1):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
-    if dataset in ['MNIST', 'SVHN', 'cifar10', 'cifar100', 'imagenet']:
+    if dataset in ['MNIST', 'SVHN', 'cifar10', 'cifar100', 'imagenet', 'imagenette_fs_v2']:
         train_set, test_set, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
                                           test_batch_size = batch_size,
                                           collation_fct = collation_fct, root = data_root_path)
@@ -139,7 +139,7 @@ def get_transforms(dataset):
             transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
         ])
 
-    elif dataset == 'imagenette':
+    elif dataset == 'imagenette_fs_v2':
         stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         transform_train = transforms.Compose([
                          transforms.transforms.Resize([128,128]), #transforms.Resize([224,224]), #Resize([32,32])
@@ -193,6 +193,9 @@ def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = N
     elif dataset == 'imagenet':
         trainset = torchvision.datasets.ImageNet(root=root, split = 'train', transform=transform_train)
         testset = torchvision.datasets.ImageNet(root=root, split = 'val', transform=transform_test)
+    elif dataset == 'imagenette_fs_v2':
+        trainset = torchvision.datasets.ImageFolder(root + 'train/', transform=transform_train)
+        testset = torchvision.datasets.ImageFolder(root + 'val/', transform=transform_test)
         # link to download imagenet from to work with this function : https://image-net.org/challenges/LSVRC/2012/2012-downloads.php . 
         # Link to download webpage (which requeires approval) also at https://pytorch.org/vision/main/generated/torchvision.datasets.ImageNet.html.
         # see Olga Russakovsky*, Jia Deng*, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein,

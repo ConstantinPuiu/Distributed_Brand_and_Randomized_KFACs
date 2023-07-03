@@ -131,7 +131,7 @@ if __name__ == '__main__':
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for R-KFAC lean\n'.format(now_start))
     print('\nImportant args were:\n  --work_alloc_propto_RSVD_cost = {};\n  --work_eff_alloc_with_time_measurement = {};\n  --adaptable_rsvd_rank = {};\n  --rsvd_rank_adaptation_TInv_multiplier = {}\n'.format(args.work_alloc_propto_RSVD_cost, args.work_eff_alloc_with_time_measurement, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier))
-    print('--batch_size = {} (per GPU for grad, total BS for K-factors); \n'.format(args.batch_size ))
+    print('\n--batch_size = {} (per GPU for grad, total BS for K-factors); \n'.format(args.batch_size ))
     print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
     print('\n !! net_type = {}, dataset = {}'.format(args.net_type, args.dataset))
     
