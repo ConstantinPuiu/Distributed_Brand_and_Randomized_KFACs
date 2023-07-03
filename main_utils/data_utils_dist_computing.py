@@ -57,7 +57,8 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed =
     
     ########### set seed ###########
     if seed == -1: # if seed is -1 do not seed
-        pass
+        # however we stll need to seed the random rng as otherwise our partitions will be wrong
+        rng.seed(seed)
     else:
         rng.seed(seed)
         torch.manual_seed(seed)
