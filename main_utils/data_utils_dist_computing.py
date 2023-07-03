@@ -141,6 +141,7 @@ def get_transforms(dataset):
 
     elif dataset == 'imagenette_fs_v2':
         stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        """
         transform_train = transforms.Compose([
                          transforms.transforms.Resize([128,128]), #transforms.Resize([224,224]), #Resize([32,32])
                          transforms.RandomHorizontalFlip(), 
@@ -149,6 +150,20 @@ def get_transforms(dataset):
                          transforms.Normalize(*stats,inplace=True)])
        
         transform_test = transforms.Compose([transforms.Resize([128,128]), transforms.ToTensor(), transforms.Normalize(*stats)]) #transforms.Compose([transforms.Resize([224,224]), transforms.ToTensor(), transforms.Normalize(*stats)])
+        """
+        transform_train = transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(*stats),
+            ])
+        
+        transform_test = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(*stats),
+            ])
         
     elif dataset == 'imagenet':
         stats = ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225) )
