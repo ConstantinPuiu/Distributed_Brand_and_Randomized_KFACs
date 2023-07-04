@@ -113,6 +113,7 @@ def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_s
     ) as t:
         with torch.no_grad():
             for idx, (x, y_target) in enumerate(test_loader): # each GPU has it's own test loader
+                x, y_target = x.to(torch.device('cuda:{}'.format(rank))), y_target.to(torch.device('cuda:{}'.format(rank)))
                 y_pred = model(x)
                 
                 ##### update loss and acc metric objects ##########
@@ -175,7 +176,8 @@ class stored_metrics:
             print('Metric {}, data: {}\n'.format(metr, self.metrics_dict[metr]))
 ################ END: helper class for storing metrics ######################## =========================================
 
-def train_n_epochs(model, optimizer, loss_fn, train_loader, test_loader, schedule_function, args, len_train_loader, rank, world_size):
+def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test_loader,  schedule_function,
+                   args, len_train_loader, rank, world_size):
     # function returns stored_metrics_object # stored_metrics_object is None if we do not store metrics
     # args contains how many epchs to train
     
@@ -206,6 +208,7 @@ def train_n_epochs(model, optimizer, loss_fn, train_loader, test_loader, schedul
     ) as t:
         for epoch in range(0, args.n_epochs):
             tstart = time.time()
+            train_sampler.set_epoch(epoch)
             # if we are using DistributedSampler, we have to tell it which epoch this is
             #dataloader.sampler.set_epoch(epoch)
             
@@ -215,6 +218,8 @@ def train_n_epochs(model, optimizer, loss_fn, train_loader, test_loader, schedul
             
             ################### TRAINING LOOP: over batches #######################
             for jdx, (x,y) in enumerate(train_loader):#dataloader):
+                ###send data to GPU
+                x, y = x.to(torch.device('cuda:{}'.format(rank))), y.to(torch.device('cuda:{}'.format(rank)))
                 #print('\ntype(x) = {}, x = {}, x.get_device() = {}\n'.format(type(x), x, x.get_device()))
                 optimizer.zero_grad(set_to_none=True)
     
@@ -231,7 +236,7 @@ def train_n_epochs(model, optimizer, loss_fn, train_loader, test_loader, schedul
                 update_acc_and_loss_obj( loss_metric_obj = train_loss_obj, acc_metric_obj = train_acc_obj,
                                         loss_fn = loss_fn, y_pred = pred, y_target = y, 
                                         loss_increment_raw = loss)
-                #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, epoch, jdx, len_train_loader, loss.item()))
+                #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, epoch, optimizer.steps, len_train_loader, loss.item()))
                     
                 loss.backward()
                     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:

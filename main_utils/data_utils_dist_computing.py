@@ -3,6 +3,9 @@ import random as rng
 import torch
 import torchvision
 import torchvision.transforms as transforms
+
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 #from torchvision.datasets import ImageFolder
 
 ##############################################################################
@@ -43,18 +46,16 @@ class DataPartitioner(object):
 
 ''' use as'''
 """ Partitioning dataset """
-def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed = -1):
+def get_data_loaders_and_s(data_root_path, dataset, batch_size, seed = -1):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
     if dataset in ['MNIST', 'SVHN', 'cifar10', 'cifar100', 'imagenet', 'imagenette_fs_v2']:
         train_set, test_set, num_classes = get_dataloader(dataset = dataset, train_batch_size = batch_size,
                                           test_batch_size = batch_size,
-                                          collation_fct = collation_fct, root = data_root_path)
+                                          root = data_root_path)
     else:
         raise NotImplementedError('dataset = {} is not implemeted'.format(dataset))
-        
-    partition_sizes = [1.0 / size for _ in range(size)]
-    
+   
     ########### set seed ###########
     if seed == -1: # if seed is -1 do not seed
         # however we stll need to seed the random rng as otherwise our partitions will be wrong
@@ -68,26 +69,39 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed =
         torch.backends.cudnn.deterministic=True # set all CUDA-Conv operations to deterministic
         
     ########### END: set seed ######
+       
+    ######## set kwarrgs options for dataloader ###############################
+    torch.set_num_threads(4)
+    kwargs = {'num_workers': 4, 'pin_memory': True, 'prefetch_factor': 8, 'persistent_workers': True}
+    #### END: set kwarrgs options for dataloader ##############################
         
-    ################ partition train set ######################################
-    partition = DataPartitioner(train_set, partition_sizes)
-    partition = partition.use(dist.get_rank())
-    train_loader = torch.utils.data.DataLoader(partition,
-                                         batch_size=batch_size,
-                                         collate_fn = collation_fct,
-                                         shuffle=True)
-    ########### END: partition train set ######################################
+    ################ build Train Sampler and Loader #######################################
+    train_sampler = DistributedSampler(train_set,
+                                       num_replicas = size,
+                                       rank=dist.get_rank(),
+                                       )
+    train_loader = DataLoader(train_set,
+                              batch_size = batch_size,
+                              sampler=train_sampler,
+                              **kwargs,
+                              )
+    ########### END: build Train Sampler and Loader ########################################
     
-    ################ partition test set #######################################
-    partition = DataPartitioner(test_set, partition_sizes)
-    partition = partition.use(dist.get_rank())
-    test_loader = torch.utils.data.DataLoader(partition,
-                                         batch_size=batch_size,
-                                         collate_fn = collation_fct,
-                                         shuffle=True)
-    ################ END: partition test set ##################################
-    
-    return train_loader, test_loader, batch_size, num_classes
+    ################ build test Sampler and Loader #######################################
+    val_sampler = DistributedSampler(
+        test_set,
+        num_replicas = size,
+        rank = dist.get_rank(),
+    )
+    val_loader = DataLoader(
+        test_set,
+        batch_size = batch_size,
+        sampler=val_sampler,
+        **kwargs,
+    )
+    ################ END: build test Sampler and Loader #################################    
+
+    return train_sampler, train_loader, val_sampler, val_loader, batch_size, num_classes
 
 def cleanup():
     dist.destroy_process_group()
@@ -187,7 +201,7 @@ def get_transforms(dataset):
     return transform_train, transform_test
 
 
-def get_dataloader(dataset, train_batch_size, test_batch_size, collation_fct = None, root='./data'):
+def get_dataloader(dataset, train_batch_size, test_batch_size, root='./data'):
     transform_train, transform_test = get_transforms(dataset)
     trainset, testset = None, None
     # adapt root folder based on chosen dataset

@@ -11,7 +11,7 @@ print('torch.__version__ = {}'.format(torch.__version__))
 import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
 
-from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import partition_dataset, cleanup
+from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_data_loaders_and_s, cleanup
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_kfac_lean_Kfactors_batchsize import KFACOptimizer
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
 from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility, adjust_args_for_schedules
@@ -41,11 +41,13 @@ def main(world_size, args):
     print('GPU-rank {} : Partitioning dataset ...'.format(rank))
     t_partition_dset_1 = time.time()
     
-    ############################ Partition data ################################
-    train_loader, test_loader, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset,
-                                                              args.batch_size, seed = args.seed)
+    ############################ Get data loaders and samplers ################################
+    train_sampler, train_loader, _, val_loader, \
+        batch_size, num_classes = get_data_loaders_and_s(args.data_root_path, args.dataset,
+                                                         args.batch_size, seed = args.seed)
     # NOTE: seeding of random, torch, and torch.cuda is done inside partition_dataset() call
-    ####################### END : Partition data ###############################
+    ####################### END : Get data loaders and samplers ################################
+    
     
     len_train_loader = len(train_loader)
     t_partition_dset_2 = time.time()
@@ -91,7 +93,8 @@ def main(world_size, args):
     ############## END: schedule function #####################################
 
     ########################## TRAINING LOOP: over epochs ######################################################
-    stored_metrics_object = train_n_epochs(model, optimizer, loss_fn, train_loader, test_loader, schedule_function, 
+    stored_metrics_object = train_n_epochs(model, optimizer, loss_fn, train_loader, train_sampler, val_loader, 
+                                           schedule_function, 
                                            args, len_train_loader, rank, world_size)
     # how many epochs to train is in args.n_epochs
     ##################### END : TRAINING LOOP: over epochs ####################################################
