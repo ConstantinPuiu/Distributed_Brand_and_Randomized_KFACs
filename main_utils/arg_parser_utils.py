@@ -318,10 +318,10 @@ def arg_parser_add_arguments(parser, solver_name):
 def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
     parser.add_argument('--world_size', type=int, required=True)
     
-    parser.add_argument('--kfac_clip', type=int, default=7e-2, help='clip factor for Kfac step' )
-    parser.add_argument('--stat_decay', type=int, default=0.95, help='the rho' )
-    parser.add_argument('--momentum', type=int, default=0.0, help='momentum' )
-    parser.add_argument('--WD', type=int, default=7e-4, help='Weight decay' )
+    parser.add_argument('--kfac_clip', type=float, default=7e-2, help='clip factor for Kfac step' )
+    parser.add_argument('--stat_decay', type=float, default=0.95, help='the rho' )
+    parser.add_argument('--momentum', type=float, default=0.0, help='momentum' )
+    parser.add_argument('--WD', type=float, default=7e-4, help='Weight decay' )
     parser.add_argument('--batch_size', type = int, default = 256, help = 'Batch size for 1 GPU (total BS for grad is n_gpu x *this). Total BS for K-factors is just *this! (for lean-ness)')
     
     ### Others added only once moved to CIFAR10
