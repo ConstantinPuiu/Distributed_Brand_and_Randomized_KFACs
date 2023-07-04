@@ -44,7 +44,7 @@ def main(world_size, args):
     def collation_fct(x):
         return  tuple(x_.to(torch.device('cuda:{}'.format(rank))) for x_ in default_collate(x))
 
-    print('GPU-rank {} : Partitioning dataset ...'.format(rank))
+    print('GPU-rank {} : Building DataLoaders and DataSamplers (Partitioning dataset) ...'.format(rank))
     t_partition_dset_1 = time.time()
     
     ############################ Get data loaders and samplers ################################
@@ -57,7 +57,7 @@ def main(world_size, args):
     
     len_train_loader = len(train_loader)
     t_partition_dset_2 = time.time()
-    print('GPU-rank {} : Done partitioning dataset in {:.2f} s! : len(train_loader) = {}'.format(rank, t_partition_dset_2 - t_partition_dset_1, len_train_loader))
+    print('GPU-rank {} : Done building DataLoaders and DataSamplers in {:.2f} s! : len(train_loader) = {}'.format(rank, t_partition_dset_2 - t_partition_dset_1, len_train_loader))
     
     
     ##################### net selection #######################################

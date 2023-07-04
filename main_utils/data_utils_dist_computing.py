@@ -9,43 +9,9 @@ from torch.utils.data.distributed import DistributedSampler
 #from torchvision.datasets import ImageFolder
 
 ##############################################################################
-############ Dataset partition functions #####################################
+############ DataSampler and Dataloader getter function ######################
 ##############################################################################
 
-class Partition(object):
-
-    def __init__(self, data, index):
-        self.data = data
-        self.index = index
-
-    def __len__(self):
-        return len(self.index)
-
-    def __getitem__(self, index):
-        data_idx = self.index[index]
-        return self.data[data_idx]
-
-
-class DataPartitioner(object):
-
-    def __init__(self, data, sizes=[0.7, 0.2, 0.1]):
-        self.data = data
-        self.partitions = []
-        #rng = Random()
-        data_len = len(data)
-        indexes = [x for x in range(0, data_len)]
-        rng.shuffle(indexes)
-
-        for frac in sizes:
-            part_len = int(frac * data_len)
-            self.partitions.append(indexes[0:part_len])
-            indexes = indexes[part_len:]
-
-    def use(self, partition):
-        return Partition(self.data, self.partitions[partition])
-
-''' use as'''
-""" Partitioning dataset """
 def get_data_loaders_and_s(data_root_path, dataset, batch_size, seed = -1):
     size = dist.get_world_size()
     #bsz = 256 #int(128 / float(size))
@@ -107,7 +73,7 @@ def cleanup():
     dist.destroy_process_group()
 
 ##############################################################################
-############  END : Dataset partition functions ##############################
+############  END : DataSampler and Dataloader getter function ###############
 ##############################################################################
 
 def get_transforms(dataset):
