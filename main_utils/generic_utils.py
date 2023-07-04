@@ -231,7 +231,7 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
                 update_acc_and_loss_obj( loss_metric_obj = train_loss_obj, acc_metric_obj = train_acc_obj,
                                         loss_fn = loss_fn, y_pred = pred, y_target = y, 
                                         loss_increment_raw = loss)
-                #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, jdx, optimizer.steps, len_train_set, loss.item()))
+                #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, epoch, jdx, len_train_set, loss.item()))
                     
                 loss.backward()
                     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:

@@ -114,7 +114,7 @@ if __name__ == '__main__':
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
     print('\nStarted again, Current Time = {} \n for KFAC lean\n'.format(now_start))
     print('\nImportant args were:\n --work_alloc_propto_EVD_cost = {} ; \n'.format( args.work_alloc_propto_EVD_cost))
-    print('\n--batch_size = {} (per GPU for grad, total BS for K-factors); --TInv_period = {} ;\n -- TCov_period = {}; \n'.format(args.batch_size, args.TInv_period, args.TCov_period ))
+    print('\n--batch_size = {} (per GPU for grad, total BS for K-factors); \n --TInv_period = {} ;\n -- TCov_period = {}; \n'.format(args.batch_size, args.TInv_period, args.TCov_period ))
     print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
     print('\n !! net_type = {}, dataset = {}'.format(args.net_type, args.dataset))
     
