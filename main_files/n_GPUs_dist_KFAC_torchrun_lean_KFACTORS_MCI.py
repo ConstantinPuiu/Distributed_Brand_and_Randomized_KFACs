@@ -42,14 +42,14 @@ def main(world_size, args):
     t_partition_dset_1 = time.time()
     
     ############################ Partition data ################################
-    train_set, test_set, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset,
+    train_loader, test_loader, bsz, num_classes = partition_dataset(collation_fct, args.data_root_path, args.dataset,
                                                               args.batch_size, seed = args.seed)
     # NOTE: seeding of random, torch, and torch.cuda is done inside partition_dataset() call
     ####################### END : Partition data ###############################
     
-    len_train_set = len(train_set)
+    len_train_loader = len(train_loader)
     t_partition_dset_2 = time.time()
-    print('GPU-rank {} : Done partitioning dataset in {:.2f} s! : len(train_set) = {}'.format(rank, t_partition_dset_2 - t_partition_dset_1, len_train_set))
+    print('GPU-rank {} : Done partitioning dataset in {:.2f} s! : len(train_loader) = {}'.format(rank, t_partition_dset_2 - t_partition_dset_1, len_train_loader))
     
     
     ##################### net selection #######################################
@@ -91,8 +91,8 @@ def main(world_size, args):
     ############## END: schedule function #####################################
 
     ########################## TRAINING LOOP: over epochs ######################################################
-    stored_metrics_object = train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, 
-                                           args, len_train_set, rank, world_size)
+    stored_metrics_object = train_n_epochs(model, optimizer, loss_fn, train_loader, test_loader, schedule_function, 
+                                           args, len_train_loader, rank, world_size)
     # how many epochs to train is in args.n_epochs
     ##################### END : TRAINING LOOP: over epochs ####################################################
     

@@ -175,7 +175,7 @@ class stored_metrics:
             print('Metric {}, data: {}\n'.format(metr, self.metrics_dict[metr]))
 ################ END: helper class for storing metrics ######################## =========================================
 
-def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_function, args, len_train_set, rank, world_size):
+def train_n_epochs(model, optimizer, loss_fn, train_loader, test_loader, schedule_function, args, len_train_loader, rank, world_size):
     # function returns stored_metrics_object # stored_metrics_object is None if we do not store metrics
     # args contains how many epchs to train
     
@@ -214,7 +214,7 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
             ######### END: setting parameters according to SCHEDULES ##############
             
             ################### TRAINING LOOP: over batches #######################
-            for jdx, (x,y) in enumerate(train_set):#dataloader):
+            for jdx, (x,y) in enumerate(train_loader):#dataloader):
                 #print('\ntype(x) = {}, x = {}, x.get_device() = {}\n'.format(type(x), x, x.get_device()))
                 optimizer.zero_grad(set_to_none=True)
     
@@ -231,7 +231,7 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
                 update_acc_and_loss_obj( loss_metric_obj = train_loss_obj, acc_metric_obj = train_acc_obj,
                                         loss_fn = loss_fn, y_pred = pred, y_target = y, 
                                         loss_increment_raw = loss)
-                #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, epoch, jdx, len_train_set, loss.item()))
+                #print('rank = {}, epoch = {} at step = {} ({} steps per epoch) has loss.item() = {}'.format(rank, epoch, jdx, len_train_loader, loss.item()))
                     
                 loss.backward()
                     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
@@ -269,7 +269,7 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
             if ((epoch + 1) % args.test_every_X_epochs) == 0:   
                 if ( epoch + 1 < args.n_epochs ) or ( args.test_at_end == False): # if we were gonna test at the end and this is the final epoch, don't test here to avoid duplicates
                     print('\nRank = {}. Testing at epoch = {}... \n'.format(rank, epoch + 1))
-                    stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
+                    stored_metrics_object = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
                                                  stored_metrics_object = stored_metrics_object, 
                                                  rank = rank, world_size = world_size, epoch = epoch,
                                                  time_to_epoch_end_test = total_time,
@@ -284,7 +284,7 @@ def train_n_epochs(model, optimizer, loss_fn, train_set, test_set, schedule_func
     ####### test at the end of training #####
     if args.test_at_end == True: 
         print('\nRank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
-        stored_metrics_object = test(test_loader = test_set, model = model, loss_fn = loss_fn, args = args, 
+        stored_metrics_object = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
                                      stored_metrics_object = stored_metrics_object,
                                      rank = rank, world_size = world_size, epoch = args.n_epochs - 1,
                                      time_to_epoch_end_test = total_time, 

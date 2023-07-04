@@ -72,7 +72,7 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed =
     ################ partition train set ######################################
     partition = DataPartitioner(train_set, partition_sizes)
     partition = partition.use(dist.get_rank())
-    train_set = torch.utils.data.DataLoader(partition,
+    train_loader = torch.utils.data.DataLoader(partition,
                                          batch_size=batch_size,
                                          collate_fn = collation_fct,
                                          shuffle=True)
@@ -81,13 +81,13 @@ def partition_dataset(collation_fct, data_root_path, dataset, batch_size, seed =
     ################ partition test set #######################################
     partition = DataPartitioner(test_set, partition_sizes)
     partition = partition.use(dist.get_rank())
-    test_set = torch.utils.data.DataLoader(partition,
+    test_loader = torch.utils.data.DataLoader(partition,
                                          batch_size=batch_size,
                                          collate_fn = collation_fct,
                                          shuffle=True)
     ################ END: partition test set ##################################
     
-    return train_set, test_set, batch_size, num_classes
+    return train_loader, test_loader, batch_size, num_classes
 
 def cleanup():
     dist.destroy_process_group()
