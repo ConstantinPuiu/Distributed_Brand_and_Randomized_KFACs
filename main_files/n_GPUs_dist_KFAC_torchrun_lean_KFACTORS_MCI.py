@@ -111,13 +111,15 @@ def main(world_size, args):
         
     cleanup()
     print('GPU rank = {} of {} is done correctly!'.format(rank, world_size) + '\nFINISHED AT: = {} \n\n'.format(datetime.now()))
-
+    print('######### Finished Running K-FAC at seed = {} ######################################################'.format(args.seed))
+    
 if __name__ == '__main__':
     # suppose we have 3 gpus
     args = parse_args(solver_name = 'KFAC')
     now_start = datetime.now()
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
+    print('\n ######### Started Running K-FAC at seed = {} ######################################################'.format(args.seed))
     print('\nStarted again, Current Time = {} \n for KFAC lean\n'.format(now_start))
     print('\nImportant args were:\n --work_alloc_propto_EVD_cost = {} ; \n'.format( args.work_alloc_propto_EVD_cost))
     print('\n--batch_size = {} (per GPU for grad, total BS for K-factors); \n --TInv_period = {} ;\n -- TCov_period = {}; \n'.format(args.batch_size, args.TInv_period, args.TCov_period ))

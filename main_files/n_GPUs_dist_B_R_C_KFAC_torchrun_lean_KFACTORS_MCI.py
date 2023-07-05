@@ -152,13 +152,16 @@ def main(world_size, args):
         
     cleanup()
     print('GPU rank = {} of {} is done correctly!'.format(rank, world_size) + '\nFINISHED AT: = {} \n\n'.format(datetime.now()))
-
+    print('######### Finished Running BRC-KFAC at seed = {} ######################################################'.format(args.seed))
+    
+    
 if __name__ == '__main__':
     # suppose we have 3 gpus
     args = parse_args(solver_name = 'BRC-KFAC')
     now_start = datetime.now()
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
     #    f.write('\nStarted again, Current Time = {} \n'.format(now_start))
+    print('\n ######### Started Running BRC-KFAC at seed = {} ######################################################'.format(args.seed))
     print('\nStarted again, Current Time = {} \n for B-R-C-KFAC lean with  B_R_period= {}, brand_r_target_excess = {}, brand_update_multiplier_to_TCov = {}\n'.format(now_start, args.B_R_period, args.brand_r_target_excess, args.brand_update_multiplier_to_TCov))
     print('--correction_multiplier_TCov = {}, --brand_corection_dim_frac = {}'.format(args.correction_multiplier_TCov, args.brand_corection_dim_frac))
     print('\nImportant args were:\n  --work_alloc_propto_RSVD_and_B_cost = {} ; \n--B_truncate_before_inversion = {}; \n--adaptable_rsvd_rank = {}; \n--rsvd_rank_adaptation_TInv_multiplier = {};\n --adaptable_B_rank = {}; \n --B_rank_adaptation_T_brand_updt_multiplier = {};\n'.format(args.work_alloc_propto_RSVD_and_B_cost, args.B_truncate_before_inversion, args.adaptable_rsvd_rank, args.rsvd_rank_adaptation_TInv_multiplier,args.adaptable_B_rank, args.B_rank_adaptation_T_brand_updt_multiplier))
