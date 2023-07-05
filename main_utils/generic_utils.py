@@ -154,7 +154,7 @@ class stored_metrics:
         for metr in metrics_to_update_dict.keys():
             self.metrics_dict[metr].append(metrics_to_update_dict[metr])
     
-    def save_metrics(self, metrics_save_path, dataset, net_type, solver_name, run_seed):
+    def save_metrics(self, metrics_save_path, dataset, net_type, solver_name, nGPUs, run_seed):
         # get date ###########################################
         import os
         from datetime import datetime
@@ -169,7 +169,7 @@ class stored_metrics:
             os.mkdir(metrics_save_path)
         ######################################################################################
         for metr in self.metrics_dict:
-            torch.save(obj = self.metrics_dict[metr], f = metrics_save_path + '/{}_{}_{}_{}_{}.pt'.format( dataset, net_type, solver_name, metr, run_seed) )
+            torch.save(obj = self.metrics_dict[metr], f = metrics_save_path + '/{}_{}_{}_nGPUs_{}_{}_{}.pt'.format( dataset, net_type, solver_name, nGPUs, metr, run_seed) )
     
     def print_metrics(self):
         for metr in self.metrics_dict:
