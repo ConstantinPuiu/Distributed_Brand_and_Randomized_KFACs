@@ -1,4 +1,7 @@
-def l_rate_function(epoch_n, iter_n):
+def l_rate_function(epoch_n, n_GPUs, batch_size, iter_n):
+    #### scale the number of epochs by the number of GPUs and batch-size to have the same lr based on steps
+    epoch_n = epoch_n * n_GPUs * batch_size / 256
+    
     if epoch_n == 1:
         if iter_n < 3:
             return 0.3

@@ -77,7 +77,7 @@ def main(world_size, args):
     
     ###################### OPTIMIZER ##########################################
     print('GPU-rank {} : Initializing optimizer...'.format(rank))
-    optimizer =  B_R_KFACOptimizer(model, rank = rank, world_size = world_size, 
+    optimizer =  B_R_KFACOptimizer(model, rank = rank, world_size = world_size, batch_size = args.batch_size,
                                lr_function = l_rate_function, momentum = args.momentum, stat_decay = args.stat_decay, 
                                 kl_clip = args.kfac_clip, damping = KFAC_damping, 
                                 weight_decay = args.WD, TCov = args.TCov_period,

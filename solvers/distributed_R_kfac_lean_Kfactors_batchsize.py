@@ -19,7 +19,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_u
 class R_KFACOptimizer(optim.Optimizer):
     def __init__(self,
                  model,
-                 rank, world_size,
+                 rank, world_size, batch_size,
                  lr_function = lambda epoch_n, iteration_n: 0.1,
                  momentum=0.9,
                  stat_decay=0.95,
@@ -48,7 +48,11 @@ class R_KFACOptimizer(optim.Optimizer):
         if weight_decay < 0.0:
             raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
         self.epoch_number = 1
-        defaults = dict(lr = lr_function(self.epoch_number, 0), 
+        self.batch_size = batch_size
+        self.lr_function = lr_function
+        self.lr = self.lr_function(epoch_n = self.epoch_number, n_GPUs = world_size,
+                                   batch_size = batch_size, iter_n = 0 )
+        defaults = dict(lr = self.lr, 
                         momentum=momentum, damping=damping,
                         weight_decay=weight_decay)
         # TODO (CW): KFAC optimizer now only support model as input
@@ -63,9 +67,6 @@ class R_KFACOptimizer(optim.Optimizer):
         self.grad_outputs = {}
 
         self.model = model
-
-        self.lr_function = lr_function
-        self.lr = self.lr_function(self.epoch_number, 0)
         
         self.steps = 0
 
@@ -573,9 +574,10 @@ class R_KFACOptimizer(optim.Optimizer):
         #print('Taking step {}'.format(self.steps))
 
         self.epoch_number = epoch_number
-        self.lr = self.lr_function(epoch_number, self.steps)
+        self.lr = self.lr_function(epoch_n = self.epoch_number, n_GPUs = self.world_size,
+                                   batch_size = self.batch_size, iter_n = self.steps )
         for g in self.param_groups:
-            g['lr'] = self.lr_function(epoch_number, self.steps)
+            g['lr'] = self.lr
         # FIXME(CW): temporal fix for compatibility with Official LR scheduler.
         group = self.param_groups[0]
         lr = group['lr']
