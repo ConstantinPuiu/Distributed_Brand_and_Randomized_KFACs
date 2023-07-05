@@ -153,6 +153,11 @@ class stored_metrics:
         #metrics_to_update_dict is of form key (metric, i.e. test acc): value
         for metr in metrics_to_update_dict.keys():
             self.metrics_dict[metr].append(metrics_to_update_dict[metr])
+        
+    def get_device_names_and_store_in_object(self, world_size):
+        self.metrics_dict['GPU_names'] = []
+        for idx in range(0, world_size):
+            self.metrics_dict['GPU_names'].append(torch.cuda.get_device_name(idx))            
     
     def save_metrics(self, metrics_save_path, dataset, net_type, solver_name, nGPUs, batch_size, run_seed):
         # get date ###########################################

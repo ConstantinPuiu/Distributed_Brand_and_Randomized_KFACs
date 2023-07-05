@@ -118,6 +118,7 @@ def main(world_size, args):
    ####### print and save stored metrics #####################################################################
     if rank == 0 and args.store_and_save_metrics:
         stored_metrics_object.print_metrics()
+        stored_metrics_object.get_device_names_and_store_in_object(world_size = args.world_size)
         stored_metrics_object.save_metrics( metrics_save_path = args.metrics_save_path, dataset = args.dataset, 
                                            net_type = args.net_type, solver_name = 'R',  nGPUs = args.world_size,
                                            batch_size = args.batch_size, run_seed = args.seed )
