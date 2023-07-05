@@ -13,7 +13,7 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_data_loaders_and_s, cleanup
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_kfac_lean_Kfactors_batchsize import KFACOptimizer
-from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import l_rate_function
+from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import get_l_rate_function_for_dataset
 from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility, adjust_args_for_schedules
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct, train_n_epochs, test
@@ -70,7 +70,8 @@ def main(world_size, args):
     ###################### OPTIMIZER ##########################################
     print('GPU-rank {} : Initializing optimizer...'.format(rank))
     optimizer =  KFACOptimizer(model, rank = rank, world_size = world_size, batch_size = args.batch_size,
-                               lr_function = l_rate_function, momentum = args.momentum, stat_decay = args.stat_decay, 
+                               lr_function = get_l_rate_function_for_dataset(args.dataset), 
+                               momentum = args.momentum, stat_decay = args.stat_decay, 
                                 kl_clip = args.kfac_clip, damping = KFAC_damping, 
                                 weight_decay = args.WD, TCov = args.TCov_period,
                                 TInv = args.TInv_period,
