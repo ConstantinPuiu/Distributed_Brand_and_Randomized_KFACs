@@ -143,7 +143,7 @@ def main(world_size, args):
         stored_metrics_object.print_metrics()
         stored_metrics_object.save_metrics( metrics_save_path = args.metrics_save_path, dataset = args.dataset, 
                                            net_type = args.net_type, solver_name = 'BR', nGPUs = args.world_size,
-                                           run_seed = args.seed )
+                                           batch_size = args.batch_size, run_seed = args.seed )
     ####### END : print and save stored metrics ###############################################################
         
     cleanup()
