@@ -1,5 +1,4 @@
 import torch.distributed as dist
-import random as rng
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -24,10 +23,8 @@ def get_data_loaders_and_s(data_root_path, dataset, batch_size, seed = -1):
    
     ########### set seed ###########
     if seed == -1: # if seed is -1 do not seed
-        # however we stll need to seed the random rng as otherwise our partitions will be wrong
-        rng.seed(seed)
+        pass
     else:
-        rng.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         # torch.use_deterministic_algorithms(True)  # set ALL CUDA operations to deterministic
