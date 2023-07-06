@@ -43,7 +43,7 @@ def get_l_rate_function(lr_schedule_type, base_lr, lr_decay_rate, lr_decay_perio
         return get_l_rate_function_for_dataset(dataset, total_batch_size_div_256, lr_sqrt_scale_factor)
     
     else:
-        print('\n\n\ !!! WARNING !!!! : lr_schedule_type = {} does NOT have an implemented lr schedule. Defaulting to CIFAR10 lr schedule in file lrfct.py!\n\n\n'.format(dataset))
+        print('\n\n\ !!! WARNING !!!! : lr_schedule_type = {} does NOT have an implemented lr schedule. Defaulting to CIFAR10 lr schedule in file lrfct.py!\n\n\n'.format(lr_schedule_type))
         return get_l_rate_function_for_dataset('cifar10', total_batch_size_div_256, lr_sqrt_scale_factor)
 
 
