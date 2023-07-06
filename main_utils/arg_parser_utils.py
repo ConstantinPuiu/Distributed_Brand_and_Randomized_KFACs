@@ -30,7 +30,9 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
     args.print_tqdm_progress_bar = turn_0_1_var_into_T_F(args.print_tqdm_progress_bar)
     args.auto_scale_forGPUs_and_BS = turn_0_1_var_into_T_F(args.auto_scale_forGPUs_and_BS)
     
-    if solver_name == 'KFAC':
+    if solver_name == 'SGD':
+        args.use_nesterov = turn_0_1_var_into_T_F(args.use_nesterov)
+    elif solver_name == 'KFAC':
         args.work_alloc_propto_EVD_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_EVD_cost)
         
     elif solver_name == 'R-KFAC':
@@ -83,7 +85,19 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
 
 def adjust_args_for_schedules(args, solver_name):
     # run  as: args, ... (dependend on solver_name) = adjust_args_for_schedules(args, solver_name)
-    if solver_name == 'KFAC':
+    if solver_name == 'SGD':
+        ################################ SGD SCHEDULES ######################################################################
+        if args.momentum_dampening_schedule_flag == 0: # then it's False
+            momentum_dampening_schedule = {} # empty dictionary - no scheduling "enforcement"
+        else:# if the flag is True
+            from Distributed_Brand_and_Randomized_KFACs.solvers.schedules.SGD_schedules import momentum_dampening_schedule
+            if 0 in momentum_dampening_schedule.keys():
+                print('Because --momentum_dampening_schedule_flag was set to non-zero (True) and momentum_dampening_schedule[0] exists, we overwrite momentum_dampening = {} (as passed in --momentum_dampening) to TCov_schedule[0] = {}'.format(args.momentum_dampening, momentum_dampening_schedule[0]))
+                args.momentum_dampening = momentum_dampening_schedule[0]
+        return args, momentum_dampening_schedule
+        ################################ END: SGD SCHEDULES ##################################################################
+    
+    elif solver_name == 'KFAC':
         ################################ KFAC SCHEDULES ######################################################################
         ### for dealing with PERIOD SCHEDULES
         if args.TInv_schedule_flag == 0: # then it's False
@@ -280,12 +294,18 @@ def adjust_args_for_schedules(args, solver_name):
         raise ValueError('solver_name = {} is not a valid choice, see source code and implement if required !'.format(solver_name))
 
 def arg_parser_add_arguments(parser, solver_name):
-    if solver_name == 'KFAC':
+    if solver_name == 'SGD':
+        parser = parse_basic_arguments(parser)
+        parser = parse_SGD_specific_arguments(parser)
+        
+    elif solver_name == 'KFAC':
+        parser = parse_basic_arguments(parser)
         parser = parse_KFAC_specific_arguments(parser)
         #### for efficient work allocaiton selection
         parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
         
     elif solver_name == 'R-KFAC':
+        parser = parse_basic_arguments(parser)
         parser = parse_KFAC_specific_arguments(parser)
         parser = parse_R_specific_arguments(parser)
         ### added to deal with more efficient work allocaiton
@@ -296,39 +316,39 @@ def arg_parser_add_arguments(parser, solver_name):
         # (2) B we did not implement time-measurement based eff wokr alloc as it turned out to be weak
         
     elif solver_name == 'B-KFAC':
+        parser = parse_basic_arguments(parser)
         parser = parse_KFAC_specific_arguments(parser)
         # the R-specific ones are required because B-kfac only does B for FC layers, for Conv layer it does R !
         parser = parse_R_specific_arguments(parser)
         parser = parse_B_specific_arguments(parser)
         
     elif solver_name == 'BR-KFAC':
+        parser = parse_basic_arguments(parser)
         parser = parse_KFAC_specific_arguments(parser)
         parser = parse_R_specific_arguments(parser)
         parser = parse_B_specific_arguments(parser)
         parser = parse_BR_specific_arguments(parser)
         
     elif solver_name == 'BRC-KFAC':
+        parser = parse_basic_arguments(parser)
         parser = parse_KFAC_specific_arguments(parser)
         parser = parse_R_specific_arguments(parser)
         parser = parse_B_specific_arguments(parser)
         parser = parse_BR_specific_arguments(parser)
         parser = parse_BRC_specific_arguments(parser)
+    else:
+        raise ValueError('Solver: args.solver_name = {} not implemented'.format(solver_name))
     
     return parser
 
-def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
+def parse_basic_arguments(parser): # Adding arguments to ALL solvers
     parser.add_argument('--world_size', type=int, required=True)
     
-    parser.add_argument('--kfac_clip', type=float, default=7e-2, help='clip factor for Kfac step' )
-    parser.add_argument('--stat_decay', type=float, default=0.95, help='the rho' )
     parser.add_argument('--momentum', type=float, default=0.0, help='momentum' )
     parser.add_argument('--WD', type=float, default=7e-4, help='Weight decay' )
-    parser.add_argument('--batch_size', type = int, default = 256, help = 'Batch size for 1 GPU (total BS for grad is n_gpu x *this). Total BS for K-factors is just *this! (for lean-ness)')
+    parser.add_argument('--batch_size', type = int, default = 256, help = 'Batch size for 1 GPU (total BS for grad is n_gpu x *this).')
     
-    ### Others added only once moved to CIFAR10
     parser.add_argument('--n_epochs', type=int, default = 10, help = 'Number_of_epochs' )
-    parser.add_argument('--TCov_period', type=int, default = 20, help = 'Period of reupdating Kfactors (not inverses)' )
-    parser.add_argument('--TInv_period', type=int, default = 100, help = 'Period of reupdating K-factor INVERSE REPREZENTATIONS' )
     
     ### for selecting net type
     parser.add_argument('--net_type', type=str, default = 'VGG16_bn_lmxp', help = 'Possible Choices: VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected. Simple_net_for_MNIST is also possible and works only for MNIST: changed to VGG16_bn_lmxp if dataset is other than MNIST and the -for_MNIST net is selected' )
@@ -350,7 +370,7 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
     
     ### for choosing whether we have tqdm or not - might chage it later and integrate with some "verbose"-"nonverbose" choise and include the prints too
     parser.add_argument('--print_tqdm_progress_bar', type=int, default = 0, help='Set to 0 NOT to print TQDM progress bars. Anything other than 0 will print progress bars' ) 
-     
+    
     #### for lr schedules ############################################################
     parser.add_argument('--lr_schedule_type', type = str, default = 'exp', help='possible values `constant`, `cos`, `exp`, `stair`, `from_file`.\
                         From file lets you code the lr from file, different for each dataset, only the --dataset parameter is relevant to "from_file". \
@@ -368,18 +388,44 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
                         be different from what is set: the set values are for 1 GPU at 256, and scaled appropriately. \
                         Switch off for more control, switch on for easier deal with increasing GPU numbers once good lr is found.')
     
-    ############# SCHEDULE FLAGS #####################################################
+    return parser
+
+def parse_SGD_specific_arguments(parser): # Adding arguments to ALL solvers
+    parser.add_argument('--use_nesterov', type = int, default = 0, help = '0-1 True-False scheme: set to True for momentum type to be nesterov.')
+    parser.add_argument('--momentum_dampening', type = float, default = 0.0, help = 'dampening for momentum')
+    
+    ############# (non-lr) SCHEDULE FLAGS #####################################################
+    ### for dealing with PERIOD SCHEDULES
+    parser.add_argument('--momentum_dampening_schedule_flag', type=int, default = 0, 
+                        help='Set to any non-zero integer if we want to use the \
+                            momentum_dampening_schedule (schedule dict for TInv) \
+                            from solver/schedules/SGD_schedules.py' ) 
+    ############# END: (non-lr) SCHEDULE FLAGS #################################################
+    
+    return parser
+
+def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
+    # the args here are added to all K-FAC variants, including R, B, BR BRC
+    parser.add_argument('--kfac_clip', type=float, default=7e-2, help='clip factor for Kfac step' )
+    parser.add_argument('--stat_decay', type=float, default=0.95, help='the rho' )
+    
+    ### Specific to inversion
+    parser.add_argument('--TCov_period', type=int, default = 20, help = 'Period of reupdating Kfactors (not inverses)' )
+    parser.add_argument('--TInv_period', type=int, default = 100, help = 'Period of reupdating K-factor INVERSE REPREZENTATIONS' )
+    
+    ############# (non-lr) SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
     parser.add_argument('--TInv_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TInv_schedule (schedule dict for TInv) from solver/schedules/KFAC_schedules.py' ) 
     parser.add_argument('--TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the TCov_schedule (schedule dict for TCov) from solver/schedules/KFAC_schedules.py' ) 
     ###for dealing with other optimizer schedules
     parser.add_argument('--KFAC_damping_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the KFAC_damping_schedule (schedule dict for KFAC_damping) from solver/schedules/KFAC_schedules.py . If set to 0, a default schedule is used within the main file. Constant values can be easily achieved by altering the schedule to say {0: 0.1} for instance' ) 
     
-    ############# END: SCHEDULE FLAGS #################################################
+    ############# END: (non-lr) SCHEDULE FLAGS #################################################
 
     return parser
 
 def parse_R_specific_arguments(parser):
+    # the args here are added to R, B, BR, BRC
     
     ### RSVD specific params or stuff that 1st appeared in rsvd(clip and damping type)
     parser.add_argument('--rsvd_rank', type=int, default = 220, help = 'The target rank of RSVD' )
@@ -400,6 +446,7 @@ def parse_R_specific_arguments(parser):
     return parser
 
 def parse_B_specific_arguments(parser):
+    # the args here are added to B, BR, BRC
     
     ######### BRAND K-fac (also BRSKFAC) specific parameters
     #parser.add_argument('--brand_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period)' )
@@ -422,30 +469,31 @@ def parse_B_specific_arguments(parser):
     parser.add_argument('--B_rank_adaptation_T_brand_updt_multiplier', type = int, default = 5, help = 'After B_rank_adaptation_T_brand_updt_multiplier * TCov * brand_update_multiplier_TCov steps we reconsider ranks')
     parser.add_argument('--B_adaptive_max_history', type = int, default = 30, help = 'Limits the number of previous used ranks and their errors stored to cap memory, cap computation, and have only recent info')
     
-    ############# SCHEDULE FLAGS #####################################################
+    ############# (non-lr) SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
     parser.add_argument('--brand_update_multiplier_to_TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the brand_update_multiplier_to_TCov (schedule dict for brand_update_multiplier_to_TCov) from solver/schedules/B_schedules.py' ) 
-    ############# END: SCHEDULE FLAGS ################################################
+    ############# END: (non-lr) SCHEDULE FLAGS ################################################
     
     return parser
 
 def parse_BR_specific_arguments(parser):
-    
+    # the args here are added to BR and BRC
     parser.add_argument('--B_R_period', type=int, default=5, help='The factor by which (for Linear layers) the RSVDperiod is larger (lower freuency for higher brand_period). (Multiplies TInv).' )
     parser.add_argument('--B_R_period_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the B_R_period_schedule (schedule dict for B_R_period) from solver/schedules/BR_schedules.py . Note: B_R_period multiplies TInv to get how many iterations between an R-update to B-Layers (ie LL layers)' ) 
     
     return parser
 
 def parse_BRC_specific_arguments(parser):
+    # the args here are added to BRC only
     ### for dealing with the correction (the C in B-R-C)
     ### strictly speaking the C can't be switch off, it's always on, if you want off, use B-R. Can set very large to have it off practically, in whihc case we're doing B-R
     parser.add_argument('--correction_multiplier_TCov', type=int, default=5, help='How often to correct (a partial RSVD) the LL B-update representation' )
     parser.add_argument('--brand_corection_dim_frac', type=float, default=0.2, help='what percentage of modes to refresh in the correction (avoid using close to 100% - at 100% the correction is as expensive an an RSVD and doing an RSVD is cheaper - in that case use B-R with higher "R" requency (for LLs)' )
     
-    ############# SCHEDULE FLAGS #####################################################
+    ############# (non-lr) SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES
     parser.add_argument('--correction_multiplier_TCov_schedule_flag', type=int, default = 0, help='Set to any non-zero integer if we want to use the correction_multiplier_TCov_schedule (schedule dict for correction_multiplier_TCov) from solver/schedules/BRC_schedules.py . Note: correction_multiplier_TCov multiplies TInv to get how many iterations between an R-update to B-Layers (ie LL layers)' )
-    ############# END: SCHEDULE FLAGS #################################################
+    ############# END: (non-lr) SCHEDULE FLAGS #################################################
     
     return parser
 

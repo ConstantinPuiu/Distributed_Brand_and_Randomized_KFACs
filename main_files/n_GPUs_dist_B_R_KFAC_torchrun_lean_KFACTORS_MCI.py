@@ -141,7 +141,7 @@ def main(world_size, args):
     ########################## TRAINING LOOP: over epochs ######################################################
     stored_metrics_object = train_n_epochs(model, optimizer, loss_fn, train_loader, train_sampler, val_loader, 
                                            schedule_function, 
-                                           args, len_train_loader, rank, world_size)
+                                           args, len_train_loader, rank, world_size, optim_type = 'BR-KFAC')
     # how many epochs to train is in args.n_epochs
     ##################### END : TRAINING LOOP: over epochs ####################################################
     
