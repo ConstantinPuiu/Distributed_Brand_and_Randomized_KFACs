@@ -356,9 +356,10 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
                         From file lets you code the lr from file, different for each dataset, only the --dataset parameter is relevant to "from_file". \
                         The dataset param is not relevant to any other lr_schedule_type values' )
     parser.add_argument('--base_lr', type = float, default = 0.3, help='The Lr we begin with. Relevant to all lr_schedule_type in [`constant`,  `cos`, `exp`, `stair`]' )
-    parser.add_argument('--lr_decay_rate', type = float, default = 9, help='Controls how strong the decay is if lr_schedule_type in [str(exp), str(stair)]' )
-    parser.add_argument('--lr_decay_period', type = int, default = 80, help='for `exp` and `staircase` : the epoch at which lr \
-                        become zero, slowly decaying towards zero at that epoch. \
+    parser.add_argument('--lr_decay_rate', type = float, default = 9, help='Controls how strong the decay is if lr_schedule_type in [str(exp), str(stair)]\
+                        decay rate (lr_decay_rate) needs to be > 1 to actually get a decay for all settings to which it is relevant' )
+    parser.add_argument('--lr_decay_period', type = int, default = 80, help='for `exp` : the epoch at which lr becomes zero, exp-decaying towards zero at that epoch\
+                        for `stair` how many epochs with the same lr to perform before dropping lr by a factor of lr_decay_rate. \
                         Set to larger than the number of training epochs.\
                         For Cos it is the Cosine Period factor. Not relevant to `constant`' )
     parser.add_argument('--auto_scale_forGPUs_and_BS', type = int, default = 0, help = 'Switch on to have lr schedule autmoatically scaled with GPUs and total batch-size.\

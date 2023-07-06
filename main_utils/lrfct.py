@@ -17,7 +17,7 @@ def get_l_rate_function(lr_schedule_type, base_lr, lr_decay_rate, lr_decay_perio
     elif  lr_schedule_type == 'staircase':
         def lr_sch_stair(epoch_n, iter_n = None):
             epoch_n = epoch_n / total_batch_size_div_256
-            lr = base_lr * (lr_decay_rate**(epoch_n // lr_decay_period))
+            lr = base_lr / ( lr_decay_rate**(epoch_n // lr_decay_period) )
             return lr * lr_sqrt_scale_factor
         return lr_sch_stair
     
