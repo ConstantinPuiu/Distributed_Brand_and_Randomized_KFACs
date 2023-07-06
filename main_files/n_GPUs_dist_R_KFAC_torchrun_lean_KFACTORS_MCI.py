@@ -14,7 +14,7 @@ sys.path.append('/home/chri5570/') # add your own path to *this github repo here
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_data_loaders_and_s, cleanup
 from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_R_kfac_lean_Kfactors_batchsize import R_KFACOptimizer
-from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import get_l_rate_function_for_dataset
+from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import get_l_rate_function
 from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility, adjust_args_for_schedules
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.generic_utils import get_net_main_util_fct, train_n_epochs, test
@@ -70,9 +70,15 @@ def main(world_size, args):
     #################### The above is defined previously
     
     ###################### OPTIMIZER ##########################################
+    lr_schedule_fct = get_l_rate_function(lr_schedule_type = args.lr_schedule_type, base_lr = args.base_lr, 
+                                          lr_decay_rate = args.lr_decay_rate, lr_decay_period = args.lr_decay_period, 
+                                          auto_scale_forGPUs_and_BS = args. auto_scale_forGPUs_and_BS, n_GPUs = args.world_size,
+                                          batch_size = args.batch_size, dataset = args.dataset ) 
+    # get_l_rate_function returns fct handle to lr shcedule fct - arguments of the returned function (lr_schedule_fct) is only the epoch index
+    
     print('GPU-rank {} : Initializing optimizer...'.format(rank))
     optimizer =  R_KFACOptimizer(model, rank = rank, world_size = world_size, batch_size = args.batch_size,
-                               lr_function = get_l_rate_function_for_dataset(args.dataset), 
+                               lr_function = lr_schedule_fct,
                                momentum = args.momentum, stat_decay = args.stat_decay, 
                                 kl_clip = args.kfac_clip, damping = KFAC_damping, 
                                 weight_decay = args.WD, TCov = args.TCov_period,

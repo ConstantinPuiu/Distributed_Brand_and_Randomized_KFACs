@@ -28,6 +28,7 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
     args.test_at_end = turn_0_1_var_into_T_F(args.test_at_end)
     args.store_and_save_metrics = turn_0_1_var_into_T_F(args.store_and_save_metrics)
     args.print_tqdm_progress_bar = turn_0_1_var_into_T_F(args.print_tqdm_progress_bar)
+    args.auto_scale_forGPUs_and_BS = turn_0_1_var_into_T_F(args.auto_scale_forGPUs_and_BS)
     
     if solver_name == 'KFAC':
         args.work_alloc_propto_EVD_cost = turn_0_1_var_into_T_F(args.work_alloc_propto_EVD_cost)
@@ -349,6 +350,22 @@ def parse_KFAC_specific_arguments(parser): # Adding K-FAC specific arguments
     
     ### for choosing whether we have tqdm or not - might chage it later and integrate with some "verbose"-"nonverbose" choise and include the prints too
     parser.add_argument('--print_tqdm_progress_bar', type=int, default = 0, help='Set to 0 NOT to print TQDM progress bars. Anything other than 0 will print progress bars' ) 
+     
+    #### for lr schedules ############################################################
+    parser.add_argument('--lr_schedule_type', type = str, default = 'exp', help='possible values `constant`, `cos`, `exp`, `stair`, `from_file`.\
+                        From file lets you code the lr from file, different for each dataset, only the --dataset parameter is relevant to "from_file". \
+                        The dataset param is not relevant to any other lr_schedule_type values' )
+    parser.add_argument('--base_lr', type = float, default = 0.3, help='The Lr we begin with. Relevant to all lr_schedule_type in [`constant`,  `cos`, `exp`, `stair`]' )
+    parser.add_argument('--lr_decay_rate', type = float, default = 9, help='Controls how strong the decay is if lr_schedule_type in [str(exp), str(stair)]' )
+    parser.add_argument('--lr_decay_period', type = int, default = 80, help='for `exp` and `staircase` : the epoch at which lr \
+                        become zero, slowly decaying towards zero at that epoch. \
+                        Set to larger than the number of training epochs.\
+                        For Cos it is the Cosine Period factor. Not relevant to `constant`' )
+    parser.add_argument('--auto_scale_forGPUs_and_BS', type = int, default = 0, help = 'Switch on to have lr schedule autmoatically scaled with GPUs and total batch-size.\
+                        If on, scales lr by sqrt(total_batchsize) as typical and the periods by total batchsize - to ensure fixed\
+                        schedule in number of steps (rather than epochs). Switching on will result in the lr and lr schedule\
+                        be different from what is set: the set values are for 1 GPU at 256, and scaled appropriately. \
+                        Switch off for more control, switch on for easier deal with increasing GPU numbers once good lr is found.')
     
     ############# SCHEDULE FLAGS #####################################################
     ### for dealing with PERIOD SCHEDULES

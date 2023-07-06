@@ -72,8 +72,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
         self.epoch_number = 1
         self.batch_size = batch_size
         self.lr_function = lr_function
-        self.lr = self.lr_function(epoch_n = self.epoch_number, n_GPUs = world_size,
-                                   batch_size = batch_size, iter_n = 0 )
+        self.lr = self.lr_function(epoch_n = self.epoch_number, iter_n = 0 )
         defaults = dict(lr = self.lr, 
                         momentum=momentum, damping=damping,
                         weight_decay=weight_decay)
@@ -852,8 +851,7 @@ class B_R_C_KFACOptimizer(optim.Optimizer):
             print('rank = {}, at step = {}, after the sav_inpt and grad hooks\n'.format(self.rank, self.steps))
 
         self.epoch_number = epoch_number
-        self.lr = self.lr_function(epoch_n = self.epoch_number, n_GPUs = self.world_size,
-                                   batch_size = self.batch_size, iter_n = self.steps )
+        self.lr = self.lr_function(epoch_n = self.epoch_number, iter_n = self.steps )
         for g in self.param_groups:
             g['lr'] = self.lr
         # FIXME(CW): temporal fix for compatibility with Official LR scheduler.
