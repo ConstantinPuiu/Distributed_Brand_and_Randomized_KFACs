@@ -231,11 +231,10 @@ def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test
     
                 pred = model(x)
                 #label = x['label']
-                if optim_type in ['KFAC', 'R-KFAC', 'B-KFAC', 'BR-KFAC', 'BRC-KFAC']:
-                    if optimizer.steps % optimizer.TCov == 0: #KFAC_matrix_update_frequency == 0:
-                        optimizer.acc_stats = True
-                    else:
-                        optimizer.acc_stats = False
+                if optimizer.steps % optimizer.TCov == 0: #KFAC_matrix_update_frequency == 0:
+                    optimizer.acc_stats = True
+                else:
+                    optimizer.acc_stats = False
                     
                 loss = loss_fn(pred, y)#label)
                 
@@ -248,10 +247,8 @@ def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test
                 loss.backward()
                     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:
                     #    f.write('Rank (GPU number) {} at batch {}:'.format(rank, jdx) + str(dist.get_rank())+ ', epoch ' +str(epoch+1) + ', loss: {}\n'.format(str(loss.item())))
-                if optim_type in ['KFAC', 'R-KFAC', 'B-KFAC', 'BR-KFAC', 'BRC-KFAC']:
-                    optimizer.step(epoch_number = epoch + 1, error_savepath = None)
-                else: 
-                    optimizer.step()
+                
+                optimizer.step(epoch_number = epoch + 1, error_savepath = None)
             ################ END:  TRAINING LOOP: over batches ####################
             
             #### end epoch-time measurement
@@ -293,10 +290,7 @@ def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test
             ############ END: test every few epochs during training ###############
     
     ##################### END : TRAINING LOOP: over epochs ####################################################
-    if optim_type in ['KFAC', 'R-KFAC', 'B-KFAC', 'BR-KFAC', 'BRC-KFAC']:
-        print('\n!!!\nTIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n!!!\n'.format(loss.item()))
-    else:
-        print('\n!!!\nTIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, (jdx+1) * (epoch + 1) ) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n!!!\n'.format(loss.item()))
+    print('\n!!!\nTIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n!!!\n'.format(loss.item()))
     ####### test at the end of training #####
     if args.test_at_end == True: 
         print('\nRank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))

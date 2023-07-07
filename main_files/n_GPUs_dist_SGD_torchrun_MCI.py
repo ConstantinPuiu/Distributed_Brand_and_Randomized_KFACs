@@ -12,7 +12,7 @@ import sys
 sys.path.append('/home/chri5570/') # add your own path to *this github repo here!
 
 from Distributed_Brand_and_Randomized_KFACs.main_utils.data_utils_dist_computing import get_data_loaders_and_s, cleanup
-from torch.optim import SGD
+from Distributed_Brand_and_Randomized_KFACs.solvers.distributed_SGD_wrapped_like_KFAC import SGD_wrapped_like_KFAC
 from Distributed_Brand_and_Randomized_KFACs.main_utils.lrfct import get_l_rate_function
 from Distributed_Brand_and_Randomized_KFACs.main_utils.arg_parser_utils import parse_args, adjust_args_for_0_1_and_compatibility, adjust_args_for_schedules
 
@@ -75,9 +75,10 @@ def main(world_size, args):
     # get_l_rate_function returns fct handle to lr shcedule fct - arguments of the returned function (lr_schedule_fct) is only the epoch index
     
     print('GPU-rank {} : Initializing optimizer...'.format(rank))
-    optimizer =  SGD(model.parameters(), lr = args.base_lr,
-                     momentum = args.momentum, dampening = args.momentum_dampening, 
-                     weight_decay = args.WD, nesterov = args.use_nesterov)#   
+    optimizer =  SGD_wrapped_like_KFAC( model.parameters(), lr = args.base_lr,
+                                        lr_function = lr_schedule_fct ,
+                                        momentum = args.momentum, dampening = args.momentum_dampening, 
+                                        weight_decay = args.WD, nesterov = args.use_nesterov)#   
     print('GPU-rank {} : Done initializing optimizer. Started training...'.format(rank))
     ###################### END: OPTIMIZER #####################################
     
@@ -86,8 +87,6 @@ def main(world_size, args):
     
     ############## schedule function ##########################################
     def schedule_function(optimizer, epoch):
-        ### for SGD only we put the lt scheduler in the schedule function, as the optimizer has no internal check for lr schedule as KFAC which we coded has
-        optimizer.lr = lr_schedule_fct(epoch_n = epoch, iter_n = None)
         ### 
         if epoch in momentum_dampening_schedule:
             optimizer.dampening =  momentum_dampening_schedule[epoch]
