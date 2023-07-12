@@ -3,7 +3,7 @@
 #SBATCH --time=10:00:00
 #SBATCH --job-name=all_solv_C
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:2 --constraint='gpu_sku:A100'
+#SBATCH --gres=gpu:2 --constraint='gpu_sku:V100' --constraint='gpu_mem:32GB'
 #SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=2
 #SBATCH --gpus-per-task=1
@@ -36,7 +36,8 @@ do
 	--data_root_path '/data/math-opt-ml/' \
 	--dataset 'cifar10' \
 	--use_nesterov 0 \
-	--momentum_dampening_schedule_flag 0 --momentum_dampening 0 \
+	--momentum_dampening_schedule_flag 0 --momentum_dampening 0 
+
 	sleep 1m 1s
 done
 #####################################################################
