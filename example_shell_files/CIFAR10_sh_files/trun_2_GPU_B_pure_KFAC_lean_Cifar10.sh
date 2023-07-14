@@ -33,7 +33,7 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri
 --test_at_end 1 --test_every_X_epochs 3 \
 --seed 12345 --print_tqdm_progress_bar 1 \
 --store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
---net_type 'resnet18' \
+--net_type 'VGG16_bn_lmxp' \
 --data_root_path '/data/math-opt-ml/' \
 --dataset 'cifar10' \
 --TInv_period 100 --TCov_period 20 \
