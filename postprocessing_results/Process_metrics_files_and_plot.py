@@ -91,8 +91,8 @@ if get_and_print_times == True:
         m_t_per_epoch, s_t_per_epoch = all_compressed_metrics_dict[solver]['t_per_epoch']
         print('Solver: {}\n Time to {:.2f}\% test acc:  {:.2f}+/- {:.2f} s \
               \n N. Epochs to {:.2f}\% test acc:  {:.2f}+/- {:.2f} \
-              \n Average Per-epoch time: {:.2f}+/- {:.2f}'.format(
+              \n Average Per-epoch time: {:.2f}+/- {:.2f} s'.format(
               solver, t_acc_criterion, m_t_acc, s_t_acc,
                       t_acc_criterion, m_n_epoch, s_n_epoch,
-                                       m_n_epoch, s_n_epoch))
+                                       m_t_per_epoch, s_t_per_epoch))
 ################################ END: do table data ###########################
