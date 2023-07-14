@@ -1,23 +1,34 @@
 import torch
-from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_list, get_t_per_epoch_list,\
+from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_list, get_t_per_epoch_and_step_list,\
     get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save
 
 ####################### parameters ############################################
-root_folder = 'path_to_where_metrics_are_saved'
-date = '2023-07-13' # YYYY-MM-DD format
+root_folder = './root_folder'
 
-solver_list = ['SGD', 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, BR, BRC, KFAC, SGD
+#### VGG16_bn_lmxp CIFAR10 ######################
+
+#date = '2023-07-06' ## A100 - 2gpu
+
+date = '2023-07-11'## V100-32GB - 2gpu  # YYYY-MM-DD format
+#date = '2023-07-12' ## V100-32GB - 4gpu
+
+#### end: VGG16_bn_lmxp CIFAR10 ######################
+""" VGG16_bn_lmxp CIFAR10 Complete results 2 GPUs: A100 @ 2023-07-06; V100-32GB @ 2023-07-11
+                                           4 GPUs: A100 @  ; V100-32GB @ 2023-07-12 
+"""
+
+solver_list = [ 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, BR, BRC, KFAC, 
 net_type = 'VGG16_bn_lmxp' # VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected
 dataset = 'cifar10' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
 batch_size = 128 # batchsize per GPU
 num_GPUs = 2 #can be in [ 1, 2, 4 ]
 
 t_acc_criterion = 92.0
-savepath = 'path_where_to_save_plots'
+savepath = './save_plots_path'
 #################### END parameter ############################################
 ########### ========= What to do when running ====== ##########################
 get_and_print_times = True # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean
-plot_convergence_graphs = True
+plot_convergence_graphs = False
 ########### ======= END: What to do when running ==== #########################
 
 ###################### troch.load data from files #############################
@@ -74,14 +85,18 @@ if get_and_print_times == True:
         m_n_epoch_to_acc, s_n_epoch_to_acc = get_mean_and_std(n_epoch_to_t_acc_list) 
         
         # get time per epoch: this is average, and we should consider the fact that the rank is adaptive, thus changing the time per epoch
-        t_per_epoch_list = get_t_per_epoch_list(read_metrics_for_solver)
+        t_per_epoch_list, t_per_step_list, steps_per_epoch = get_t_per_epoch_and_step_list(read_metrics_for_solver, dataset)
         m_t_per_epoch, s_t_per_epoch = get_mean_and_std(t_per_epoch_list)
+        
+        # get time per step: this is average, and we should consider the fact that the rank is adaptive - so the k-fac worload changes
+        m_t_per_step, s_t_per_step = get_mean_and_std(t_per_step_list)
         
         # form dictionaries 
         current_metric_dict = {}
         current_metric_dict['t_to_test_acc'] = m_t_acc, s_t_acc
         current_metric_dict['n_epoch_to_acc'] = m_n_epoch_to_acc, s_n_epoch_to_acc
         current_metric_dict['t_per_epoch'] = m_t_per_epoch, s_t_per_epoch
+        current_metric_dict['t_per_step'] = m_t_per_step, s_t_per_step
         all_compressed_metrics_dict[solver] = current_metric_dict
         
     # print and / or save
@@ -89,10 +104,16 @@ if get_and_print_times == True:
         m_t_acc, s_t_acc = all_compressed_metrics_dict[solver]['t_to_test_acc']
         m_n_epoch, s_n_epoch = all_compressed_metrics_dict[solver]['n_epoch_to_acc']
         m_t_per_epoch, s_t_per_epoch = all_compressed_metrics_dict[solver]['t_per_epoch']
+        m_t_per_step, s_t_per_step = all_compressed_metrics_dict[solver]['t_per_step']
         print('Solver: {}\n Time to {:.2f}\% test acc:  {:.2f}+/- {:.2f} s \
               \n N. Epochs to {:.2f}\% test acc:  {:.2f}+/- {:.2f} \
-              \n Average Per-epoch time: {:.2f}+/- {:.2f} s'.format(
+              \n Average Per-epoch time: {:.2f}+/- {:.2f} s \
+              \n Average Per-step time: {:.5f}+/- {:.5f} s\n'.format(
               solver, t_acc_criterion, m_t_acc, s_t_acc,
                       t_acc_criterion, m_n_epoch, s_n_epoch,
-                                       m_t_per_epoch, s_t_per_epoch))
+                                       m_t_per_epoch, s_t_per_epoch,
+                                       m_t_per_step, s_t_per_step 
+                                       ))
+    
+    print('\n steps_per_epoch = {}'.format(steps_per_epoch))
 ################################ END: do table data ###########################

@@ -14,6 +14,9 @@ def get_loader_for_solver_only(net_type, dataset, batch_size, num_GPUs,
     return (lambda solver: load_metric_list(solver, net_type, dataset, batch_size, num_GPUs, 
                      root_folder, date, verbose = verbose) )
 
+no_training_samples = {'MNIST': 60000, 'SVHN': 530000, 'cifar10': 50000, 
+                           'cifar100': 50000, 'imagenet': 1281167, 'imagenette_fs_v2': 9469 }
+
 def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs, 
                      root_folder, date, verbose = True):
     print('Loading data for {} (net_type ={}, \ndataset = {}, \nbatch_size = {}, \nnum_GPUs= {}, \
@@ -27,9 +30,6 @@ def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs,
     
     seed_list = [12345, 23456, 34567, 45678, 56789]
     
-    no_training_samples = {'MNIST': 60000, 'SVHN': 530000, 'cifar10': 50000, 
-                           'cifar100': 50000, 'imagenet': 1281167, 'imagenette_fs_v2': 9469 }
-    
     no_steps_per_epoch = math.ceil(no_training_samples[dataset] / num_GPUs / batch_size)
     print('no_steps_per_epoch = {} at dataset = {}, num_GPUs = {}, batch_size = {}'.format(no_steps_per_epoch, dataset, num_GPUs, batch_size))
     
@@ -41,11 +41,12 @@ def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs,
         read_metrics[metric] = {}
     
     for seed in seed_list:
+        read_metrics['num_GPUs'] = {seed: num_GPUs}
+        read_metrics['batch_size'] = {seed: batch_size}
         for metric in metric_list:
             path_final = path + '{}_{}_{}_nGPUs_{}_Bsize_{}_{}_{}.pt'.format(dataset, net_type, solver,
                                                                           num_GPUs, batch_size, metric, seed)
             read_metrics[metric][seed] = torch.load(path_final)
-            read_metrics['num_GPUs'] = {seed: num_GPUs}
             
         if verbose == True:
             print('\n ############################################################# \
@@ -64,16 +65,30 @@ def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs,
 ### Tools for getting table-like presentation ################################################
 ##############################################################################################
 
-def get_t_per_epoch_list(read_metrics_for_solver):
+def get_t_per_epoch_and_step_list(read_metrics_for_solver, dataset):
     """ assumed format is read_metrics[metric][seed] for 1 solver
     It is also assumed all metrics have (correctly!) the same number of seeds stored"""
+    # returns t_per_epoch_list - actually measured
+    # returns t_per_step_list - computed fromt_per_epoch_list using the number of steps per epoch 
+    ########### - this is just the average time per step for that epoch
+    
     seeds_list = read_metrics_for_solver['epoch_number_train'].keys()
     t_per_epoch_list = []
+    t_per_step_list = []
+    # steps per epoch stuff
+    sedd = list(read_metrics_for_solver['num_GPUs'].keys())[0]
+    num_GPUs = read_metrics_for_solver['num_GPUs'][ sedd]
+    batch_size = read_metrics_for_solver['batch_size'][ sedd]
+    steps_per_epoch = (no_training_samples[dataset] // (num_GPUs * batch_size) ) + 1.0
+    # end steps per epoch stuff
+    
     for seed in seeds_list:
         current_cumsum_time_list = np.array(read_metrics_for_solver['time_to_epoch_end_train'][seed])
         time_increments_list = list(current_cumsum_time_list[1:] - current_cumsum_time_list[:-1])
         t_per_epoch_list = t_per_epoch_list + time_increments_list
-    return t_per_epoch_list
+    
+    t_per_step_list = list(np.array(t_per_epoch_list) / steps_per_epoch )
+    return t_per_epoch_list, t_per_step_list, steps_per_epoch
 
 def get_t_and_n_ep_list_to_acc(read_metrics_for_solver, t_acc_criterion):
     """ assumed format is read_metrics[metric][seed] for 1 solver
