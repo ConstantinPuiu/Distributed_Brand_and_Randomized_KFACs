@@ -31,14 +31,14 @@ def get_network(network, dropout = False, **kwargs):
                                                   nn.Linear(512 * 8 * 4, 512 * 4),
                                                   nn.ReLU(inplace = False),
                                                   nn.Dropout(), # p =0.5  by default
-                                                  nn.Linear(512 * 4, 10),
+                                                  nn.Linear(512 * 4, kwargs.get('num_classes', 10) ),
                                               )
         elif network == 'FC_net_for_CIFAR10':
             Net.classifier = nn.Sequential(
                                                   nn.Linear(512 * 8 * 4, 512 * 4),
                                                   nn.ReLU(inplace = False),
                                                   nn.Dropout(), # p =0.5  by default
-                                                  nn.Linear(512 * 4, 10),
+                                                  nn.Linear(512 * 4, kwargs.get('num_classes', 10) ),
                                               )
         else:
             raise NotImplementedError('Dropout only implemented for [vgg16_bn_less_maxpool] and [FC_net_for_CIFAR10] for now!')
