@@ -29,6 +29,7 @@ def adjust_args_for_0_1_and_compatibility(args, rank, solver_name):
     args.store_and_save_metrics = turn_0_1_var_into_T_F(args.store_and_save_metrics)
     args.print_tqdm_progress_bar = turn_0_1_var_into_T_F(args.print_tqdm_progress_bar)
     args.auto_scale_forGPUs_and_BS = turn_0_1_var_into_T_F(args.auto_scale_forGPUs_and_BS)
+    args.stop_at_test_acc = turn_0_1_var_into_T_F(args.stop_at_test_acc)
     
     if solver_name == 'SGD':
         args.use_nesterov = turn_0_1_var_into_T_F(args.use_nesterov)
@@ -370,6 +371,12 @@ def parse_basic_arguments(parser): # Adding arguments to ALL solvers
     
     ### for choosing whether we have tqdm or not - might chage it later and integrate with some "verbose"-"nonverbose" choise and include the prints too
     parser.add_argument('--print_tqdm_progress_bar', type=int, default = 0, help='Set to 0 NOT to print TQDM progress bars. Anything other than 0 will print progress bars' ) 
+    
+    ### for choosing to stop early
+    parser.add_argument('--stop_at_test_acc', type=int, default = 0, help='Set to 1 to stop immediately once test accuracy reaches --stopping_test_acc / args.stopping_test_acc\
+                        Note that tests are only performed once in args.test_every_X_epochs, and that frequency is relevant here' ) 
+    parser.add_argument('--stopping_test_acc', type=float, default = 99.75, help='if ==True, stop immediately once the test accuracy reaches *this threshold' ) 
+    # 
     
     #### for lr schedules ############################################################
     parser.add_argument('--lr_schedule_type', type = str, default = 'exp', help='possible values `constant`, `cos`, `exp`, `stair`, `from_file`.\

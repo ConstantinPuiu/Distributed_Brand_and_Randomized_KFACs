@@ -150,7 +150,8 @@ if __name__ == '__main__':
     print('\nScheduling flags were: \n --TInv_schedule_flag = {}, --TCov_schedule_flag = {}, --KFAC_damping_schedule_flag = {}'.format(args.TInv_schedule_flag, args.TCov_schedule_flag, args.KFAC_damping_schedule_flag))
     print('\n !! net_type = {}, dataset = {}'.format(args.net_type, args.dataset))
     
-    print('\nDoing << {} >> epochs'.format(args.n_epochs))
+    print('\nDoing << {} >> epochs and criterion-stopping had args: args.stop_at_test_acc = {},\
+          args.stopping_test_acc = {}'.format(args.n_epochs, args.stop_at_test_acc, args.stopping_test_acc))
     world_size = args.world_size
     main(world_size, args)
     #with open('/data/math-opt-ml/chri5570/initial_trials/2GPUs_test_output.txt', 'a+') as f:

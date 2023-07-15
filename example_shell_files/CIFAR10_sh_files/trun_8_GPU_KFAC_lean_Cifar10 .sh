@@ -24,10 +24,11 @@ source activate /data/math-opt-ml/chri5570/myenv
 #NCCL_LL_THRESHOLD=0
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_MCI.py \
 --world_size 8 --n_epoch 20 --batch_size 128 \
+--stop_at_test_acc 0 --stopping_test_acc 92 \
 --kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
 --lr_schedule_type 'exp' --base_lr 0.3 --lr_decay_rate 9 --lr_decay_period 80 --auto_scale_forGPUs_and_BS 1 \
 --test_at_end 1 --test_every_X_epochs 3 \
---seed 12345 --print_tqdm_progress_bar 1 \
+--seed 112345 --print_tqdm_progress_bar 1 \
 --store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
 --net_type 'resnet18' \
 --data_root_path '/data/math-opt-ml/' \

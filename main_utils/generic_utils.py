@@ -124,6 +124,7 @@ def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_s
                 t.update(1)
     tl = test_loss_obj.avg()    
     ta = test_acc_obj.avg(); ta = 100 * ta # display as percentage
+    
     #Test is currently printing. TO DO: store to list and save for future plots
     print('\nRank {} / ws = {}. Epoch = {} :  test_loss = {:.5f}, test_accuracy = {:.4f}%\n'.format(rank, world_size, epoch + 1, tl, ta))
     
@@ -139,7 +140,7 @@ def test(test_loader, model, loss_fn, args, stored_metrics_object, rank, world_s
     test_acc_obj.zero_out()    
     
     #return tl, ta
-    return stored_metrics_object
+    return stored_metrics_object, tl, ta
 
 ################ helper class for storing metrics  (all in 1 object ########### =========================================
 class stored_metrics:
@@ -281,11 +282,19 @@ def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test
             if ((epoch + 1) % args.test_every_X_epochs) == 0:   
                 if ( epoch + 1 < args.n_epochs ) or ( args.test_at_end == False): # if we were gonna test at the end and this is the final epoch, don't test here to avoid duplicates
                     print('\nRank = {}. Testing at epoch = {}... \n'.format(rank, epoch + 1))
-                    stored_metrics_object = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
-                                                 stored_metrics_object = stored_metrics_object, 
-                                                 rank = rank, world_size = world_size, epoch = epoch,
-                                                 time_to_epoch_end_test = total_time,
-                                                 test_loss_obj = test_loss_obj, test_acc_obj = test_acc_obj) 
+                    stored_metrics_object, _, ta = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
+                                                                stored_metrics_object = stored_metrics_object, 
+                                                                rank = rank, world_size = world_size, epoch = epoch,
+                                                                time_to_epoch_end_test = total_time,
+                                                                test_loss_obj = test_loss_obj, test_acc_obj = test_acc_obj) 
+                    
+                    if args.stop_at_test_acc == True and ta >= args.stopping_test_acc: # test-loss based stopping criterion to be implemented
+                        print('Rank {}, n_GPUs = {}: Training stopped with\
+                              test-acc criterion satisfied ( since args.stop_at_test_acc = {}, \
+                              args.stopping_test_acc = {} and attained test accuracy is {}\
+                                  ) !'.format(rank, world_size, args.stop_at_test_acc, 
+                                              args.stopping_test_acc, ta))
+                        break
                     model.train() # put model back into training mode
             ############ END: test every few epochs during training ###############
     
@@ -294,11 +303,11 @@ def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test
     ####### test at the end of training #####
     if args.test_at_end == True: 
         print('\nRank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
-        stored_metrics_object = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
-                                     stored_metrics_object = stored_metrics_object,
-                                     rank = rank, world_size = world_size, epoch = args.n_epochs - 1,
-                                     time_to_epoch_end_test = total_time, 
-                                     test_loss_obj = test_loss_obj, test_acc_obj = test_acc_obj) 
+        stored_metrics_object, _, _ = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
+                                        stored_metrics_object = stored_metrics_object,
+                                        rank = rank, world_size = world_size, epoch = args.n_epochs - 1,
+                                        time_to_epoch_end_test = total_time, 
+                                        test_loss_obj = test_loss_obj, test_acc_obj = test_acc_obj) 
     ## END:  test at the end of training ####    
     
     return stored_metrics_object

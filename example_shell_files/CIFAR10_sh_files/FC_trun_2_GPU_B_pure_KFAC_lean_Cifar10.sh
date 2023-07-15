@@ -24,10 +24,11 @@ source activate /data/math-opt-ml/chri5570/myenv
 #NCCL_BLOCKING_WAIT=1
 #OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epochs 10 --brand_period 5000000000000000 --brand_update_multiplier_to_TCov 5
 OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_pure_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epochs 10 --batch_size 256 \
+--stop_at_test_acc 0 --stopping_test_acc 92 \
 --kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
 --lr_schedule_type 'exp' --base_lr 0.3 --lr_decay_rate 9 --lr_decay_period 80 --auto_scale_forGPUs_and_BS 1 \
 --test_at_end 1 --test_every_X_epochs 3 \
---seed 12345 --print_tqdm_progress_bar 1 \
+--seed 112345 --print_tqdm_progress_bar 1 \
 --store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
 --brand_update_multiplier_to_TCov 5 \
 --work_alloc_propto_RSVD_and_B_cost 1 \
