@@ -29,7 +29,7 @@ do
         OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_SGD_torchrun_MCI.py --world_size 4 --n_epoch 175 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 92.00 \
         --momentum 0.9 --WD 0.0007 \
-        --lr_schedule_type 'staircase' --base_lr 0.1 --lr_decay_rate 3 --lr_decay_period 22 --auto_scale_forGPUs_and_BS 1 \
+        --lr_schedule_type 'staircase' --base_lr 0.1 --lr_decay_rate 3 --lr_decay_period 19 --auto_scale_forGPUs_and_BS 1 \
         --test_at_end 1 --test_every_X_epochs 1 \
         --seed $SEED --print_tqdm_progress_bar 1 \
         --store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
