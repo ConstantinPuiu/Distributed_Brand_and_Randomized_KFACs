@@ -302,7 +302,7 @@ def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test
     print('\n!!!\nTIME: {:.3f} s. Rank (GPU number) {} at batch {}, total steps optimizer.steps = {}:'.format(total_time, rank, jdx, optimizer.steps) + ', epoch ' +str(epoch + 1) + ', instant train-loss: {:.5f}\n!!!\n'.format(loss.item()))
     ####### test at the end of training #####
     if args.test_at_end == True: 
-        print('\nRank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, args.n_epochs + 1))
+        print('\nRank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, epoch + 1))
         stored_metrics_object, _, _ = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
                                         stored_metrics_object = stored_metrics_object,
                                         rank = rank, world_size = world_size, epoch = args.n_epochs - 1,
