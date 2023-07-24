@@ -5,6 +5,22 @@ import os
 import matplotlib.pyplot as plt
 import math
 
+##### helper function to:
+#### check if code was run on correct GPUs  for all solvers (as desired) 
+def check_which_GPU_s(all_compressed_metrics_dict):
+        GPUs_for_each_solver = {}
+        for solver in all_compressed_metrics_dict.keys():
+            GPU_names_for_this_solver = []
+            for seed in all_compressed_metrics_dict[solver]['GPU_names'].keys():
+                if all_compressed_metrics_dict[solver]['GPU_names'][seed] in GPU_names_for_this_solver:
+                    pass
+                else:
+                    GPU_names_for_this_solver.append(all_compressed_metrics_dict[solver]['GPU_names'][seed])
+            GPUs_for_each_solver[solver] = GPU_names_for_this_solver
+        return GPUs_for_each_solver
+
+####################
+        
 ############################################################
 ################### basic loading tools ####################
 ############################################################
@@ -55,6 +71,7 @@ def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs,
                   \n ############################################################# \
                   \n'.format(seed, dataset, net_type, solver, num_GPUs, batch_size,
                                                 read_metrics['GPU_names'][seed]))
+    
     return read_metrics
 
 ############################################################
@@ -138,7 +155,7 @@ def check_make_path(path):
         os.mkdir(path)
     return path
 
-def plot_and_save(metrics_for_1_solver, y_metric, x_metric, savepath = None, solver_name = None):
+def plot_and_save(metrics_for_1_solver, y_metric, x_metric, dataset,  savepath = None, solver_name = None):
     # assumed format is read_metrics[metric][seed] for 1 solver
     if savepath is None:
         print('Not saving plot y_metric = {}, x_metric = {} '.format(y_metric, x_metric))
@@ -173,13 +190,14 @@ def plot_and_save(metrics_for_1_solver, y_metric, x_metric, savepath = None, sol
     if savepath is None:
         plt.show()
     else:
-        savepath = check_make_path(savepath + '{}_{}/'.format(solver_name, GPU_spec_for_title))
+        savepath = check_make_path(savepath + '{}/'.format(dataset))
+        savepath = check_make_path(savepath + '{}_{}/'.format( solver_name, GPU_spec_for_title))
         plt.savefig(savepath + '{}_{}_vs_{}.eps'.format(solver_name, y_metric, thesis_names_dict[x_metric]), format = 'eps')
         plt.savefig(savepath + '{}_{}_vs_{}.png'.format(solver_name, y_metric, thesis_names_dict[x_metric]), format = 'png')
     
     
 def plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric, \
-                                   x_metric, savepath = None):
+                                   x_metric, dataset, savepath = None):
     if savepath is None:
         print('Not saving plot y_metric = {}, x_metric = {} '.format(y_metric, x_metric))
     
@@ -243,6 +261,7 @@ def plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric, 
     if savepath is None:
         plt.show()
     else:
+        savepath = check_make_path(savepath + '{}/'.format(dataset))
         savepath = check_make_path(savepath + '{}_{}/'.format('All_solvers', GPU_spec_for_title))
         plt.savefig(savepath + '{}_{}_vs_{}.eps'.format('allsolvers_avgplots_', y_metric, thesis_names_dict[x_metric]), format = 'eps')
         plt.savefig(savepath + '{}_{}_vs_{}.png'.format('allsolvers_avgplots_', y_metric, thesis_names_dict[x_metric]), format = 'png')

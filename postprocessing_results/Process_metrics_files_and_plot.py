@@ -1,34 +1,40 @@
 import torch
 from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_list, get_t_per_epoch_and_step_list,\
-    get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save
+    get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save, check_which_GPU_s
 
 ####################### parameters ############################################
-root_folder = './root_folder'
+root_folder = 'path_to/saved_metrics'
 
 #### VGG16_bn_lmxp CIFAR10 ######################
 
-#date = '2023-07-06' ## A100 - 2gpu
+#date = '2023-07-06' ## cifar10 A100 - 2gpu
 
-date = '2023-07-11'## V100-32GB - 2gpu  # YYYY-MM-DD format
-#date = '2023-07-12' ## V100-32GB - 4gpu
+#date = '2023-07-11'## cifar10  V100-32GB - 2gpu  # YYYY-MM-DD format
+#date = '2023-07-12' ## cifar10  V100-32GB - 4gpu
 
 #### end: VGG16_bn_lmxp CIFAR10 ######################
+date = '2023-07-16'
+
+##### CIFAR100###########################
+#date = '2023-07-16'## CIFAR100  V100-32GB - 1GPU, 2GPUs and 4gpus 70% target acc
+########################################
 """ VGG16_bn_lmxp CIFAR10 Complete results 2 GPUs: A100 @ 2023-07-06; V100-32GB @ 2023-07-11
                                            4 GPUs: A100 @  ; V100-32GB @ 2023-07-12 
 """
 
-solver_list = [ 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, BR, BRC, KFAC, 
+solver_list = [ 'SGD', 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, BR, BRC, KFAC, 
 net_type = 'VGG16_bn_lmxp' # VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected
-dataset = 'cifar10' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
+dataset = 'cifar100' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
 batch_size = 128 # batchsize per GPU
-num_GPUs = 2 #can be in [ 1, 2, 4 ]
+num_GPUs = 4 #can be in [ 1, 2, 4 ]
 
-t_acc_criterion = 92.0
-savepath = './save_plots_path'
+t_acc_criterion = 50.0
+savepath = 'path_to_/plots_from_saved_metrics_to_be_written_by_this_p/'
 #################### END parameter ############################################
 ########### ========= What to do when running ====== ##########################
 get_and_print_times = True # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean
 plot_convergence_graphs = False
+check_GPUs_overview = True
 ########### ======= END: What to do when running ==== #########################
 
 ###################### troch.load data from files #############################
@@ -45,32 +51,37 @@ if plot_convergence_graphs == True:
         # test acc
         plot_and_save(read_metrics_for_solver, y_metric = 'test_acc',
                       x_metric = 'epoch_number_test', savepath = savepath, 
+                      dataset = dataset,
                       solver_name = solver)
         plot_and_save(read_metrics_for_solver, y_metric = 'test_acc',
                       x_metric = 'time_to_epoch_end_test', savepath = savepath, 
+                      dataset = dataset,
                       solver_name = solver)
         # train acc
         plot_and_save(read_metrics_for_solver, y_metric = 'train_acc', 
                       x_metric = 'epoch_number_train', savepath = savepath, 
+                      dataset = dataset,
                       solver_name = solver)
         plot_and_save(read_metrics_for_solver, y_metric = 'train_acc',
                       x_metric = 'time_to_epoch_end_train', savepath = savepath, 
+                      dataset = dataset,
                       solver_name = solver)
         # loss
         plot_and_save(read_metrics_for_solver, y_metric = 'train_loss',
                       x_metric = 'epoch_number_train', savepath = savepath, 
+                      dataset = dataset,
                       solver_name = solver)
         metrics_concatenated_over_solvers[solver] = read_metrics_for_solver
     
     # average metrics plot
     plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric = 'test_acc',
-                                   x_metric = 'epoch_number_test', savepath = savepath)
+                                   x_metric = 'epoch_number_test', dataset = dataset, savepath = savepath)
     plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric = 'test_acc',
-                                   x_metric = 'time_to_epoch_end_test', savepath = savepath)
+                                   x_metric = 'time_to_epoch_end_test', dataset = dataset, savepath = savepath)
     plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric = 'train_acc',
-                                   x_metric = 'epoch_number_train', savepath = savepath)
+                                   x_metric = 'epoch_number_train', dataset = dataset,  savepath = savepath)
     plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric = 'train_loss',
-                                   x_metric = 'epoch_number_train', savepath = savepath)
+                                   x_metric = 'epoch_number_train', dataset = dataset,  savepath = savepath)
 ############################## END: do plots ###################################
     
 ##################################### do table data ###########################
@@ -98,7 +109,7 @@ if get_and_print_times == True:
         current_metric_dict['t_per_epoch'] = m_t_per_epoch, s_t_per_epoch
         current_metric_dict['t_per_step'] = m_t_per_step, s_t_per_step
         all_compressed_metrics_dict[solver] = current_metric_dict
-        
+    
     # print and / or save
     for solver in solver_list:
         m_t_acc, s_t_acc = all_compressed_metrics_dict[solver]['t_to_test_acc']
@@ -116,4 +127,19 @@ if get_and_print_times == True:
                                        ))
     
     print('\n steps_per_epoch = {}'.format(steps_per_epoch))
+            
 ################################ END: do table data ###########################
+    
+########### check GPUs easily ########################################
+
+if check_GPUs_overview == True:
+    ### see if GPUs were the correct ones
+    D = {}
+    for solver in solver_list:  
+        read_metrics_for_solver = loader_for_solver(solver)
+        D[solver] = read_metrics_for_solver
+        
+    GPUs_for_each_solver = check_which_GPU_s(D)
+    print('\n=================\n GPUs_for_each_solver = {}\n=================\n'.format(GPUs_for_each_solver))
+        
+########### END: check GPUs easily ####################################
