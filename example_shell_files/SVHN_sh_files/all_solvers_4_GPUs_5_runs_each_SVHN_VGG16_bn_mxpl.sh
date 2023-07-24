@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --time=10:00:00
-#SBATCH --job-name=all_4G_C
+#SBATCH --job-name=all_4G_S
 #SBATCH --nodes=1 --constraint=fabric:HDR
 #SBATCH --gres=gpu:4 --constraint='gpu_sku:V100' --constraint='gpu_mem:32GB'
 #SBATCH --cpus-per-task=4
@@ -131,7 +131,7 @@ do
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
 	--net_type 'VGG16_bn_lmxp' \
 	--data_root_path '/data/math-opt-ml/' \
-	--dataset 'cifar10' \
+	--dataset 'SVHN' \
 	--TInv_period 100 --TCov_period 20 \
 	--brand_update_multiplier_to_TCov 1 \
 	--B_R_period 5 \

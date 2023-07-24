@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --time=12:00:00
-#SBATCH --job-name=all_1G_CH
+#SBATCH --job-name=all_1G_S
 #SBATCH --nodes=1 --constraint=fabric:HDR
 #SBATCH --gres=gpu:1 --constraint='gpu_sku:V100' --constraint='gpu_mem:32GB'
 #SBATCH --cpus-per-task=4
