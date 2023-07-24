@@ -3,7 +3,7 @@ from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_
     get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save, check_which_GPU_s
 
 ####################### parameters ############################################
-root_folder = '/path_to_read_metrics_from/'
+root_folder = '/path_to_saved_metrics'
 
 #### VGG16_bn_lmxp CIFAR10 ######################
 
@@ -26,10 +26,10 @@ solver_list = [ 'SGD', 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, B
 net_type = 'VGG16_bn_lmxp' # VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected
 dataset = 'cifar10' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
 batch_size = 128 # batchsize per GPU
-num_GPUs = 1 #can be in [ 1, 2, 4 ]
+num_GPUs = 2 #can be in [ 1, 2, 4 ]
 
-t_acc_criterion = 50.0
-savepath = '/path_to_save_plots_to/'
+t_acc_criterion = 92.0
+savepath = '/path_to_where_plots_will_be_saved_when_running_this'
 #################### END parameter ############################################
 ########### ========= What to do when running ====== ##########################
 get_and_print_times = True # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean

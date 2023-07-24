@@ -63,6 +63,12 @@ def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs,
             path_final = path + '{}_{}_{}_nGPUs_{}_Bsize_{}_{}_{}.pt'.format(dataset, net_type, solver,
                                                                           num_GPUs, batch_size, metric, seed)
             read_metrics[metric][seed] = torch.load(path_final)
+            ### CORRECT FOR WRONG EPOCH STAMP AT FINAL TEST EPOCH WHEN  -##############
+            # - this is an artifact of a slight bug in the saving protocol when early stopping occurs
+            # (that can be corrected at postprocessing)
+            if metric == 'epoch_number_test':
+                read_metrics[metric][seed][-1] = read_metrics['epoch_number_train'][seed][-1]
+            ### END: CORRECT FOR WRONG EPOCH STAMP AT FINAL TEST EPOCH WHEN  -#########
             
         if verbose == True:
             print('\n ############################################################# \
@@ -245,8 +251,9 @@ def plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric, 
         
         if x_averageing_required == True:
              averaged_over_solver_x_axis[solver] = get_average_over_list_with_early_stopping(unaveraged_list_of_x)#
-        else:
-            averaged_over_solver_x_axis[solver] = unaveraged_list_of_x[0]
+        else: # even if averaging is not required, still do it to ensure length of list is right 
+            #(as some runs take less epochs than others and the avg function we call solves this issue under the hood)
+            averaged_over_solver_x_axis[solver] = get_average_over_list_with_early_stopping(unaveraged_list_of_x)
         
     # 2. plot
     plt.figure(figsize = (8, 6))
@@ -267,7 +274,10 @@ def plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric, 
         if thesis_names_dict[y_metric] in ['Train Loss', 'Test Loss']:
             plt.semilogy(x_axis, y_axis, label = '{}'.format(thesis_names_dict[solver]))
         else:
-            plt.plot(x_axis, y_axis, label = '{}'.format(thesis_names_dict[solver]))
+            try:
+                plt.plot(x_axis, y_axis, label = '{}'.format(thesis_names_dict[solver]))
+            except:
+                pass
         
     plt.legend()
     
