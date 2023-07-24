@@ -305,7 +305,7 @@ def train_n_epochs(model, optimizer, loss_fn,  train_loader, train_sampler, test
         print('\nRank = {}. Testing at the end (i.e. epoch = {})... \n'.format(rank, epoch + 1))
         stored_metrics_object, _, _ = test(test_loader = test_loader, model = model, loss_fn = loss_fn, args = args, 
                                         stored_metrics_object = stored_metrics_object,
-                                        rank = rank, world_size = world_size, epoch = epoch + 1,
+                                        rank = rank, world_size = world_size, epoch = epoch,
                                         time_to_epoch_end_test = total_time, 
                                         test_loss_obj = test_loss_obj, test_acc_obj = test_acc_obj) 
     ## END:  test at the end of training ####    
