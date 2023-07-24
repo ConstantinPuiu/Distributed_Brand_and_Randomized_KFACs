@@ -3,7 +3,7 @@ from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_
     get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save, check_which_GPU_s
 
 ####################### parameters ############################################
-root_folder = '/path_to_saved_metrics'
+root_folder = '/path_to_where_to_read_saved_metrics_from'
 
 #### VGG16_bn_lmxp CIFAR10 ######################
 
@@ -13,7 +13,7 @@ root_folder = '/path_to_saved_metrics'
 #date = '2023-07-12' ## cifar10  V100-32GB - 4gpu
 
 #### end: VGG16_bn_lmxp CIFAR10 ######################
-date = 'CIFAR10'
+date = 'CIFAR100'
 
 ##### CIFAR100###########################
 #date = '2023-07-16'## CIFAR100  V100-32GB - 1GPU, 2GPUs and 4gpus 70% target acc
@@ -24,12 +24,12 @@ date = 'CIFAR10'
 
 solver_list = [ 'SGD', 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, BR, BRC, KFAC, 
 net_type = 'VGG16_bn_lmxp' # VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected
-dataset = 'cifar10' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
+dataset = 'cifar100' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
 batch_size = 128 # batchsize per GPU
-num_GPUs = 2 #can be in [ 1, 2, 4 ]
+num_GPUs = 4 #can be in [ 1, 2, 4 ]
 
-t_acc_criterion = 92.0
-savepath = '/path_to_where_plots_will_be_saved_when_running_this'
+t_acc_criterion = 70.0
+savepath = '/path_to_where_to_write_plots_from_read_saved_metrics/'
 #################### END parameter ############################################
 ########### ========= What to do when running ====== ##########################
 get_and_print_times = True # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean
@@ -86,6 +86,7 @@ if plot_convergence_graphs == True:
     
 ##################################### do table data ###########################
 if get_and_print_times == True:
+    print('DOING TABLES!')
     #### save in object
     for solver in solver_list:
         read_metrics_for_solver = loader_for_solver(solver) #format read_metrics[metric][seed]
@@ -131,7 +132,8 @@ if get_and_print_times == True:
 ################################ END: do table data ###########################
     
 ########### check GPUs easily ########################################
-
+loader_for_solver = get_loader_for_solver_only(net_type, dataset, batch_size, num_GPUs, 
+                                               root_folder, date, verbose = False)
 if check_GPUs_overview == True:
     ### see if GPUs were the correct ones
     D = {}

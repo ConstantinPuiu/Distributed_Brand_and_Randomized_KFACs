@@ -35,7 +35,8 @@ no_training_samples = {'MNIST': 60000, 'SVHN': 530000, 'cifar10': 50000,
 
 def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs, 
                      root_folder, date, verbose = True):
-    print('Loading data for {} (net_type ={}, \ndataset = {}, \nbatch_size = {}, \nnum_GPUs= {}, \
+    if verbose == True:
+        print('Loading data for {} (net_type ={}, \ndataset = {}, \nbatch_size = {}, \nnum_GPUs= {}, \
                      \nroot_folder, \ndate = {}, \nroot_folder = {}\n)...'.format(solver, net_type, dataset, 
                                                     batch_size, num_GPUs, date,
                                                     root_folder     )  )
@@ -47,7 +48,8 @@ def load_metric_list(solver, net_type, dataset, batch_size, num_GPUs,
     seed_list = [12345, 23456, 34567, 45678, 56789]
     
     no_steps_per_epoch = math.ceil(no_training_samples[dataset] / num_GPUs / batch_size)
-    print('no_steps_per_epoch = {} at dataset = {}, num_GPUs = {}, batch_size = {}'.format(no_steps_per_epoch, dataset, num_GPUs, batch_size))
+    if verbose == True:
+        print('no_steps_per_epoch = {} at dataset = {}, num_GPUs = {}, batch_size = {}'.format(no_steps_per_epoch, dataset, num_GPUs, batch_size))
     
     path = root_folder + '/' + date + '/'
     
