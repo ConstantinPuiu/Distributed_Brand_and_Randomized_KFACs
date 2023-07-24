@@ -3,7 +3,7 @@ from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_
     get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save, check_which_GPU_s
 
 ####################### parameters ############################################
-root_folder = 'path_to/saved_metrics'
+root_folder = '/path_to_read_metrics_from/'
 
 #### VGG16_bn_lmxp CIFAR10 ######################
 
@@ -13,7 +13,7 @@ root_folder = 'path_to/saved_metrics'
 #date = '2023-07-12' ## cifar10  V100-32GB - 4gpu
 
 #### end: VGG16_bn_lmxp CIFAR10 ######################
-date = '2023-07-16'
+date = 'CIFAR10'
 
 ##### CIFAR100###########################
 #date = '2023-07-16'## CIFAR100  V100-32GB - 1GPU, 2GPUs and 4gpus 70% target acc
@@ -24,16 +24,16 @@ date = '2023-07-16'
 
 solver_list = [ 'SGD', 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, BR, BRC, KFAC, 
 net_type = 'VGG16_bn_lmxp' # VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected
-dataset = 'cifar100' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
+dataset = 'cifar10' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
 batch_size = 128 # batchsize per GPU
-num_GPUs = 4 #can be in [ 1, 2, 4 ]
+num_GPUs = 1 #can be in [ 1, 2, 4 ]
 
 t_acc_criterion = 50.0
-savepath = 'path_to_/plots_from_saved_metrics_to_be_written_by_this_p/'
+savepath = '/path_to_save_plots_to/'
 #################### END parameter ############################################
 ########### ========= What to do when running ====== ##########################
 get_and_print_times = True # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean
-plot_convergence_graphs = False
+plot_convergence_graphs = True
 check_GPUs_overview = True
 ########### ======= END: What to do when running ==== #########################
 

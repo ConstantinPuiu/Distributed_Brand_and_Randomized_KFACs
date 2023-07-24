@@ -229,9 +229,22 @@ def plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric, 
             unaveraged_list_of_y.append( metrics_concatenated_over_solvers[solver][y_metric][seed] )
         
         #### do the avrerage
-        averaged_over_solver_y_axis[solver] = list( np.average(np.array(unaveraged_list_of_y), axis = 0) )
+        def get_average_over_list_with_early_stopping(unaveraged_list_of_lists):
+            min_len = 1e16
+            # get min length
+            for lisst in unaveraged_list_of_lists:
+                if len(lisst) < min_len:
+                    min_len = len(lisst)
+            # correct lists to min length
+            for idx in range(0,len(unaveraged_list_of_lists)):
+                unaveraged_list_of_lists[idx] = unaveraged_list_of_lists[idx][0:min_len]
+            
+            return list( np.average(np.array(unaveraged_list_of_lists), axis = 0) )
+        
+        averaged_over_solver_y_axis[solver] = get_average_over_list_with_early_stopping(unaveraged_list_of_y)
+        
         if x_averageing_required == True:
-             averaged_over_solver_x_axis[solver] = list( np.average(np.array(unaveraged_list_of_x), axis = 0) )
+             averaged_over_solver_x_axis[solver] = get_average_over_list_with_early_stopping(unaveraged_list_of_x)#
         else:
             averaged_over_solver_x_axis[solver] = unaveraged_list_of_x[0]
         
