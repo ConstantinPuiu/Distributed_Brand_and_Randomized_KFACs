@@ -163,7 +163,8 @@ def check_make_path(path):
         os.mkdir(path)
     return path
 
-def plot_and_save(metrics_for_1_solver, y_metric, x_metric, dataset,  savepath = None, solver_name = None):
+def plot_and_save(metrics_for_1_solver, y_metric, x_metric, dataset,  savepath = None, \
+                  solver_name = None, horizontal_line_criterion = None):
     # assumed format is read_metrics[metric][seed] for 1 solver
     if savepath is None:
         print('Not saving plot y_metric = {}, x_metric = {} '.format(y_metric, x_metric))
@@ -183,16 +184,36 @@ def plot_and_save(metrics_for_1_solver, y_metric, x_metric, dataset,  savepath =
     plt.title('{}: {} vs {} \n on {} GPUs'.format(thesis_names_dict[solver_name], thesis_names_dict[y_metric], 
                                           thesis_names_dict[x_metric], GPU_spec_for_title) )
     plt.xlabel('{}{}'.format(thesis_names_dict[x_metric], units_dict[thesis_names_dict[x_metric]]))
-    plt.ylabel('{}{}'.format(thesis_names_dict[y_metric], units_dict[thesis_names_dict[x_metric]]))
+    plt.ylabel('{}{}'.format(thesis_names_dict[y_metric], units_dict[thesis_names_dict[y_metric]]))
     # plt.hold( True ) # deprecated behaviour past v 2.1, auto set to true, can't se tto false
     
+    longest_x = -1e15
+    smallest_x = +1e15
     for idx, seed in enumerate(y_dict.keys()):
         y_axis = y_dict[seed]
         x_axis = x_dict[seed]
+        
+        if x_axis[0] < smallest_x:
+            smallest_x = x_axis[0]
+        if x_axis[-1] > longest_x:
+            longest_x = x_axis[-1]
+            
         if thesis_names_dict[y_metric] in ['Train Loss', 'Test Loss']:
             plt.semilogy(x_axis, y_axis, label = 'Run {}'.format(idx))
         else:
             plt.plot(x_axis, y_axis, label = 'Run {}'.format(idx))
+    
+    #### add horizontal y line
+    if horizontal_line_criterion is not None:
+        if thesis_names_dict[y_metric] in ['Train Loss', 'Test Loss']:
+            plt.semilogy([smallest_x, longest_x], horizontal_line_criterion * np.ones(2),
+                         label = '{} line'.format(horizontal_line_criterion),
+                         linestyle='dashed', linewidth = 3, color='black')
+        else:
+            plt.plot([smallest_x, longest_x], horizontal_line_criterion * np.ones(2),
+                     label = '{}% line'.format(horizontal_line_criterion),
+                     linestyle='dashed', linewidth = 3, color='black')
+            
     plt.legend()
     
     if savepath is None:
@@ -205,7 +226,7 @@ def plot_and_save(metrics_for_1_solver, y_metric, x_metric, dataset,  savepath =
     
     
 def plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric, \
-                                   x_metric, dataset, savepath = None):
+                                   x_metric, dataset, savepath = None, horizontal_line_criterion = None):
     if savepath is None:
         print('Not saving plot y_metric = {}, x_metric = {} '.format(y_metric, x_metric))
     
@@ -270,17 +291,33 @@ def plot_avg_over_solvers_and_save(metrics_concatenated_over_solvers, y_metric, 
     plt.ylabel('{}{}{}'.format(average_qmark, thesis_names_dict[y_metric], units_dict[thesis_names_dict[y_metric]]))
     # plt.hold( True ) # deprecated behaviour past v 2.1, auto set to true, can't se tto false
     
+    smallest_x = 1e15
+    longest_x = -1e15
     for solver in metrics_concatenated_over_solvers.keys():
         y_axis = averaged_over_solver_y_axis[solver]
         x_axis = averaged_over_solver_x_axis[solver]
+        
+        if x_axis[0] < smallest_x:
+            smallest_x = x_axis[0]
+        if x_axis[-1] > longest_x:
+            longest_x = x_axis[-1]
+        
         if thesis_names_dict[y_metric] in ['Train Loss', 'Test Loss']:
             plt.semilogy(x_axis, y_axis, label = '{}'.format(thesis_names_dict[solver]))
         else:
-            try:
-                plt.plot(x_axis, y_axis, label = '{}'.format(thesis_names_dict[solver]))
-            except:
-                pass
-        
+            plt.plot(x_axis, y_axis, label = '{}'.format(thesis_names_dict[solver]))
+            
+    #### add horizontal y line
+    if horizontal_line_criterion is not None:
+        if thesis_names_dict[y_metric] in ['Train Loss', 'Test Loss']:
+            plt.semilogy([smallest_x, longest_x], horizontal_line_criterion * np.ones(2),
+                         label = '{} line'.format(horizontal_line_criterion),
+                         linestyle='dashed', linewidth = 3, color='black')
+        else:
+            plt.plot([smallest_x, longest_x], horizontal_line_criterion * np.ones(2),
+                     label = '{}% line'.format(horizontal_line_criterion),
+                     linestyle='dashed', linewidth = 3, color='black')
+            
     plt.legend()
     
     if savepath is None:
