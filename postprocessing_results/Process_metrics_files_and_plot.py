@@ -1,9 +1,10 @@
 import torch
+import pickle
 from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_list, get_t_per_epoch_and_step_list,\
     get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save, check_which_GPU_s
 
 ####################### parameters ############################################
-root_folder = '/path/to/saved_metrics'
+root_folder = '/'
 
 #### VGG16_bn_lmxp CIFAR10 ######################
 
@@ -29,7 +30,7 @@ batch_size = 128 # batchsize per GPU
 num_GPUs = 1 #can be in [ 1, 2, 4 ]
 
 t_acc_criterion = 92.0
-savepath = '/path/to/write/plots_from_saved_metrics/'
+savepath = '/'
 #################### END parameter ############################################
 ########### ========= What to do when running ====== ##########################
 get_and_print_times = True # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean
@@ -113,6 +114,10 @@ if get_and_print_times == True:
         current_metric_dict['t_per_step'] = m_t_per_step, s_t_per_step
         current_metric_dict['nsr_and_ntr'] = nsr, ntr
         all_compressed_metrics_dict[solver] = current_metric_dict
+    
+    #### save dictionary as raw data for barplots
+    with open('{}_{}_nGPUs_{}_crit_{}_bs_{}.pkl'.format(dataset, net_type, num_GPUs, t_acc_criterion, batch_size), 'wb') as fp:
+        pickle.dump(all_compressed_metrics_dict, fp)
     
     # print and / or save
     for solver in solver_list:
