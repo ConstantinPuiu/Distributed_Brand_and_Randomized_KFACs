@@ -3,7 +3,7 @@ from utils_for_metrics_processor import get_loader_for_solver_only, load_metric_
     get_t_and_n_ep_list_to_acc, get_mean_and_std, plot_and_save, plot_avg_over_solvers_and_save, check_which_GPU_s
 
 ####################### parameters ############################################
-root_folder = './'
+root_folder = '/path/to/saved_metrics'
 
 #### VGG16_bn_lmxp CIFAR10 ######################
 
@@ -13,7 +13,7 @@ root_folder = './'
 #date = '2023-07-12' ## cifar10  V100-32GB - 4gpu
 
 #### end: VGG16_bn_lmxp CIFAR10 ######################
-date = 'CIFAR100'
+date = 'CIFAR10'
 
 ##### CIFAR100###########################
 #date = '2023-07-16'## CIFAR100  V100-32GB - 1GPU, 2GPUs and 4gpus 70% target acc
@@ -24,15 +24,15 @@ date = 'CIFAR100'
 
 solver_list = [ 'SGD', 'KFAC', 'R', 'B', 'BR', 'BRC'] # possible values: R, B, BR, BRC, KFAC, 
 net_type = 'VGG16_bn_lmxp' # VGG16_bn_lmxp, FC_CIFAR10 (gives an adhoc FC net for CIFAR10), resnet##, resnet##_corrected
-dataset = 'cifar100' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
+dataset = 'cifar10' # 'Possible Choices: MNIST, SVHN, cifar10, cifar100, imagenet, imagenette_fs_v2
 batch_size = 128 # batchsize per GPU
 num_GPUs = 1 #can be in [ 1, 2, 4 ]
 
 t_acc_criterion = 92.0
-savepath = './'
+savepath = '/path/to/write/plots_from_saved_metrics/'
 #################### END parameter ############################################
 ########### ========= What to do when running ====== ##########################
-get_and_print_times = False # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean
+get_and_print_times = True # gets and prints mean in #runs = len(seed)  and the standard deviation around the mean
 plot_convergence_graphs = True
 check_GPUs_overview = True
 ########### ======= END: What to do when running ==== #########################
@@ -93,8 +93,8 @@ if get_and_print_times == True:
     for solver in solver_list:
         read_metrics_for_solver = loader_for_solver(solver) #format read_metrics[metric][seed]
         
-        ## get # epochs and time to epoch 
-        t_to_t_acc_list, n_epoch_to_t_acc_list = get_t_and_n_ep_list_to_acc(read_metrics_for_solver, t_acc_criterion)
+        ## get # epochs and time to epoch  # nsr is number of succesful runs, ntr is number of total runs
+        t_to_t_acc_list, n_epoch_to_t_acc_list, nsr, ntr = get_t_and_n_ep_list_to_acc(read_metrics_for_solver, t_acc_criterion)
         m_t_acc, s_t_acc = get_mean_and_std(t_to_t_acc_list)
         m_n_epoch_to_acc, s_n_epoch_to_acc = get_mean_and_std(n_epoch_to_t_acc_list) 
         
@@ -111,6 +111,7 @@ if get_and_print_times == True:
         current_metric_dict['n_epoch_to_acc'] = m_n_epoch_to_acc, s_n_epoch_to_acc
         current_metric_dict['t_per_epoch'] = m_t_per_epoch, s_t_per_epoch
         current_metric_dict['t_per_step'] = m_t_per_step, s_t_per_step
+        current_metric_dict['nsr_and_ntr'] = nsr, ntr
         all_compressed_metrics_dict[solver] = current_metric_dict
     
     # print and / or save
@@ -119,14 +120,17 @@ if get_and_print_times == True:
         m_n_epoch, s_n_epoch = all_compressed_metrics_dict[solver]['n_epoch_to_acc']
         m_t_per_epoch, s_t_per_epoch = all_compressed_metrics_dict[solver]['t_per_epoch']
         m_t_per_step, s_t_per_step = all_compressed_metrics_dict[solver]['t_per_step']
+        nsr, ntr = all_compressed_metrics_dict[solver]['nsr_and_ntr']
         print('Solver: {}\n Time to {:.2f}\% test acc:  {:.2f}+/- {:.2f} s \
               \n N. Epochs to {:.2f}\% test acc:  {:.2f}+/- {:.2f} \
               \n Average Per-epoch time: {:.2f}+/- {:.2f} s \
-              \n Average Per-step time: {:.5f}+/- {:.5f} s\n'.format(
+              \n Average Per-step time: {:.5f}+/- {:.4f} s \
+              \n And a [succesful runs] / [total runs]  =  {} / {}\n'.format(
               solver, t_acc_criterion, m_t_acc, s_t_acc,
                       t_acc_criterion, m_n_epoch, s_n_epoch,
                                        m_t_per_epoch, s_t_per_epoch,
-                                       m_t_per_step, s_t_per_step 
+                                       m_t_per_step, s_t_per_step,
+                                       nsr, ntr
                                        ))
     
     print('\n steps_per_epoch = {}'.format(steps_per_epoch))

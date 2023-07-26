@@ -127,17 +127,21 @@ def get_t_and_n_ep_list_to_acc(read_metrics_for_solver, t_acc_criterion):
         epoch_list = read_metrics_for_solver['epoch_number_test'][seed]
         criterion_list = read_metrics_for_solver['test_acc'][seed]
         
-        where_indices = np.where(np.array(criterion_list) >= t_acc_criterion)[0]
-        print('seed {}. In our criterion-search we got np.where(np.array(criterion_list) >= t_acc_criterion) ={}\
-              \n But we are saving the 1st one as it is the first time it hits the criterion!!\n'.format(seed, where_indices) )
-        idx_first_criterion_true = where_indices[0]
-        t_to_t_acc = time_list[idx_first_criterion_true]
-        n_epoch_to_t_acc = epoch_list[idx_first_criterion_true]
-        #append to list
-        t_to_t_acc_list.append(t_to_t_acc)
-        n_epoch_to_t_acc_list.append(n_epoch_to_t_acc)
+        indices_where_criterion_satisfied = np.where(np.array(criterion_list) >= t_acc_criterion)[0]
+        if len(indices_where_criterion_satisfied) > 0:
+            print('seed {}. In our criterion-search we got np.where(np.array(criterion_list) >= t_acc_criterion) ={}\
+              \n But we are saving the 1st one as it is the first time it hits the criterion!!\n'.format(seed, indices_where_criterion_satisfied) )
+            idx_first_criterion_true = indices_where_criterion_satisfied[0]
+            t_to_t_acc = time_list[idx_first_criterion_true]
+            n_epoch_to_t_acc = epoch_list[idx_first_criterion_true]
+            #append to list
+            t_to_t_acc_list.append(t_to_t_acc)
+            n_epoch_to_t_acc_list.append(n_epoch_to_t_acc)
+        else: # if we do not reach the criterion on this run, do nothing - do not append!
+             print('seed {}. In our criterion-search we got AN EMPTY np.where(np.array(criterion_list) >= t_acc_criterion) = []')
+        
     
-    return t_to_t_acc_list, n_epoch_to_t_acc_list
+    return t_to_t_acc_list, n_epoch_to_t_acc_list, len(t_to_t_acc_list), len(seeds_list)
 
 
 def get_mean_and_std(data_list):
