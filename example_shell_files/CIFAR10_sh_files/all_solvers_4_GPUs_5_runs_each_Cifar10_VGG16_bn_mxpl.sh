@@ -109,7 +109,8 @@ do
 	--work_alloc_propto_RSVD_and_B_cost 1 \
 	--B_truncate_before_inversion 1 --adaptable_rsvd_rank 1 --rsvd_target_truncation_rel_err 0.033 \
         --rsvd_rank 180 --rsvd_oversampling_parameter 10 --rsvd_niter 3\
-	--rsvd_rank_adaptation_TInv_multiplier 1 --adaptable_B_rank 1 \
+	--rsvd_rank_adaptation_TInv_multiplier 1 \
+	--adaptable_B_rank 1 \
 	--B_rank_adaptation_T_brand_updt_multiplier 1 \
 	--TInv_schedule_flag 0 --TCov_schedule_flag 0 --brand_update_multiplier_to_TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0
 	
