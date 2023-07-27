@@ -81,7 +81,7 @@ do
 	--dataset 'imagenette_fs_v2' \
 	--TInv_period 100 --TCov_period 20 \
 	--work_alloc_propto_RSVD_cost 1 --work_eff_alloc_with_time_measurement 0 \
-	--adaptable_rsvd_rank 0 --rsvd_rank_adaptation_TInv_multiplier 1 \
+	--adaptable_rsvd_rank 1 --rsvd_rank_adaptation_TInv_multiplier 1 \
 	--TInv_schedule_flag 0 --TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0
 	
 	sleep 1m 1s
