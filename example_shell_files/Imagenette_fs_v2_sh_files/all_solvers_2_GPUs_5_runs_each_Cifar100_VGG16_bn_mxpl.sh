@@ -3,7 +3,7 @@
 #SBATCH --time=12:00:00
 #SBATCH --job-name=all_2G_I
 #SBATCH --nodes=1 --constraint=fabric:HDR
-#SBATCH --gres=gpu:2 --constraint='gpu_sku:V100' --constraint='gpu_mem:32GB'
+#SBATCH --gres=gpu:2 --constraint='gpu_sku:A100'
 #SBATCH --cpus-per-task=4
 #SBATCH --ntasks-per-node=2
 #SBATCH --gpus-per-task=1
