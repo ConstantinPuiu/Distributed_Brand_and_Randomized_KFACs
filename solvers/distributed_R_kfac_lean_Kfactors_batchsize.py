@@ -13,7 +13,7 @@ from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils impo
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils import update_running_stat
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.kfac_utils import fct_split_list_of_modules
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_LA_utils import (X_reg_inverse_M_adaptive_damping, M_X_reg_inverse_adaptive_damping)
-from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time, allocate_work_timebased_tensors, allocate_RSVD_inversion_work_same_fixed_r_tensor)
+from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.solver_workload_allocation_utils import (allocate_RSVD_inversion_work_same_fixed_r, allocate_ANYTHING_in_prop_to_MEASURED_time, allocate_work_timebased_tensors, allocate_RSVD_inversion_work_same_fixed_r_tensor, invert_rank_to_modules_dict)
 from Distributed_Brand_and_Randomized_KFACs.solvers.solver_utils.adaptive_rank_utils import get_new_rsvd_rank
 
 class R_KFACOptimizer(optim.Optimizer):
@@ -319,6 +319,8 @@ class R_KFACOptimizer(optim.Optimizer):
         # and after that, IF SELECTED SO THROUGH HYPERPARAM work_alloc_propto_RSVD_cost, we'll swtich to a more efficient one, once a pass has been done
         # construct self.modules_for_this_rank (a dictonary of lists] - which tells us which modules's EVD  are computed by which GPU
         self.modules_for_this_rank_A = self.modules_for_this_rank_G = fct_split_list_of_modules(self.modules, self.world_size)
+        self.rank_for_this_module_A = invert_rank_to_modules_dict(self.modules_for_this_rank_A)
+        self.rank_for_this_module_G = invert_rank_to_modules_dict(self.modules_for_this_rank_G)
         # call the same fct for A and G to get the same TRIVIAL split in both A and G: that boils down to being a module-split rather than a KFACTOR split
         # returns a dictionary of lists!
         if self.verbose_work_realloc:
@@ -620,20 +622,20 @@ class R_KFACOptimizer(optim.Optimizer):
                 #dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = False)
                 #dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = False)
                 #dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)
-                handle = dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
+                handle = dist.broadcast(self.d_a[m], src = self.rank_for_this_module_A[m], async_op=True) #dist.all_reduce(self.d_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_a[m] = 0 * self.d_a[m] + 1
 
                 #print('RANK {}. Doing line : dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
-                handle = dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = True)
+                handle = dist.broadcast(self.Q_a[m], src = self.rank_for_this_module_A[m], async_op=True)#dist.all_reduce(self.Q_a[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
 
-                handle = dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = True)
+                handle = dist.broadcast(self.d_g[m], src = self.rank_for_this_module_G[m], async_op=True)#dist.all_reduce(self.d_g[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 #self.d_g[m] = 0 * self.d_g[m] + 1
 
                 #print('RANK {}. DOING LINE: dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = False)'.format(self.rank))
-                handle = dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = True)
+                handle = dist.broadcast(self.Q_g[m], src = self.rank_for_this_module_G[m], async_op=True)#dist.all_reduce(self.Q_g[m], dist.ReduceOp.SUM, async_op = True)
                 handle.wait()
                 
                 ########FOR TIME-MEASUREMENT EFF WORK ALLOC:  initialize tensors to store measured times ###############
@@ -749,6 +751,8 @@ class R_KFACOptimizer(optim.Optimizer):
             self.old_modules_for_this_rank_G = self.modules_for_this_rank_G
             self.modules_for_this_rank_A = new_modules_for_this_rank_A
             self.modules_for_this_rank_G = new_modules_for_this_rank_G
+            self.rank_for_this_module_A = invert_rank_to_modules_dict(self.modules_for_this_rank_A)
+            self.rank_for_this_module_G = invert_rank_to_modules_dict(self.modules_for_this_rank_G)
             if self.verbose_work_realloc:
                 print(' self.work_alloc_propto_RSVD_cost was set to TRUE, so at the very end of self.steps == {}, we reallocated work in proportion to squared-size'.format(self.steps))
                 print(' as given by: self.modules_for_this_rank_A = {} \n self.modules_for_this_rank_G = {}'.format(self.modules_for_this_rank_A, self.modules_for_this_rank_G))
