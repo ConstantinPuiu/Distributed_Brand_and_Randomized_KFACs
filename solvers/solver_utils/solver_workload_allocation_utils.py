@@ -440,3 +440,9 @@ if __name__ == '__main__': ### testing
     print('Output:')
     print(allocate_RSVD_inversion_work_same_fixed_r(number_of_workers, size_0_of_all_Kfactors_G, size_0_of_all_Kfactors_A, target_rank_RSVD))
 
+def invert_rank_to_modules_dict(rank_to_modules_dict):
+    D = {}
+    for key_rank in rank_to_modules_dict.keys():
+        for module in rank_to_modules_dict[key_rank]:
+            D[module] = key_rank
+    return D
