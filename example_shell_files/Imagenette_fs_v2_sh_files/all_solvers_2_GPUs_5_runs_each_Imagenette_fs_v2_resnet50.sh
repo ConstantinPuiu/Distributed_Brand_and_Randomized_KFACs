@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=12:00:00
+#SBATCH --time=15:30:00
 #SBATCH --job-name=all_2G_I
 #SBATCH --nodes=1 --constraint=fabric:HDR
 #SBATCH --gres=gpu:2 --constraint='gpu_sku:A100'
@@ -9,7 +9,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=single:1
 #SBATCH --mem-per-cpu=15G
-#SBATCH --partition=short
+#SBATCH --partition=medium
 
 module purge
 module load Anaconda3/2020.11
@@ -32,7 +32,7 @@ source activate /data/math-opt-ml/chri5570/myenv
 #	--lr_schedule_type 'staircase' --base_lr 0.1 --lr_decay_rate 3 --lr_decay_period 35 --auto_scale_forGPUs_and_BS 1 \
 #	--test_at_end 1 --test_every_X_epochs 1 \
 #	--seed $SEED --print_tqdm_progress_bar 1 \
-#	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
+#	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics_momentum/' \
 #	--net_type 'resnet50' \
 #	--data_root_path '/data/math-opt-ml/' \
 #	--dataset 'imagenette_fs_v2' \
@@ -47,12 +47,12 @@ source activate /data/math-opt-ml/chri5570/myenv
 for SEED in 12345 23456 34567 45678 56789
 do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epoch 100 --batch_size 128 \
-	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
-	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
+	--stop_at_test_acc 1 --stopping_test_acc 92.00 \
+	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.9 --WD 0.0007 \
 	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
-	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
+	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics_momentum/' \
 	--net_type 'resnet50' \
 	--data_root_path '/data/math-opt-ml/' \
 	--dataset 'imagenette_fs_v2' \
@@ -70,12 +70,12 @@ sleep 1m 1s
 for SEED in 12345 23456 34567 45678 56789
 do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epoch 100 --batch_size 128 \
-	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
-	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
+	--stop_at_test_acc 1 --stopping_test_acc 92.00 \
+	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.9 --WD 0.0007 \
 	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
-	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
+	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics_momentum/' \
 	--net_type 'resnet50' \
 	--data_root_path '/data/math-opt-ml/' \
 	--dataset 'imagenette_fs_v2' \
@@ -97,12 +97,12 @@ sleep 1m 1s
 for SEED in 12345 23456 34567 45678 56789
 do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_pure_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epochs 100 --batch_size 128 \
-	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
-	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
+	--stop_at_test_acc 1 --stopping_test_acc 92.00 \
+	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.9 --WD 0.0007 \
 	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
-	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
+	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics_momentum/' \
 	--net_type 'resnet50' \
 	--data_root_path '/data/math-opt-ml/' \
 	--dataset 'imagenette_fs_v2' \
@@ -127,12 +127,12 @@ sleep 1m 1s
 for SEED in 12345 23456 34567 45678 56789
 do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epochs 100 --batch_size 128 \
-	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
-	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
+	--stop_at_test_acc 1 --stopping_test_acc 92.00 \
+	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.9 --WD 0.0007 \
 	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
-	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
+	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics_momentum/' \
 	--net_type 'resnet50' \
 	--data_root_path '/data/math-opt-ml/' \
 	--dataset 'imagenette_fs_v2' \
@@ -158,12 +158,12 @@ sleep 1m 1s
 for SEED in 12345 23456 34567 45678 56789
 do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_C_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 2 --n_epochs 100 --batch_size 128 \
-	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
-	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
+	--stop_at_test_acc 1 --stopping_test_acc 92.00 \
+	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.9 --WD 0.0007 \
 	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
-	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
+	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics_momentum/' \
 	--net_type 'resnet50' \
 	--data_root_path '/data/math-opt-ml/' \
 	--dataset 'imagenette_fs_v2' \

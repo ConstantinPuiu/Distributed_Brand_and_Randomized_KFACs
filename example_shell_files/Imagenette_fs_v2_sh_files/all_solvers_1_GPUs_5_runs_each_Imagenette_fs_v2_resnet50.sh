@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --job-name=all_1G_I
 #SBATCH --nodes=1 --constraint=fabric:HDR
 #SBATCH --gres=gpu:1 --constraint='gpu_sku:A100'
@@ -9,7 +9,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=single:1
 #SBATCH --mem-per-cpu=15G
-#SBATCH --partition=short
+#SBATCH --partition=medium
 
 module purge
 module load Anaconda3/2020.11
@@ -29,7 +29,7 @@ do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_SGD_torchrun_MCI.py --world_size 1 --n_epoch 205 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--momentum 0.9 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.1 --lr_decay_rate 3 --lr_decay_period 35 --auto_scale_forGPUs_and_BS 1 \
+	--lr_schedule_type 'staircase' --base_lr 0.0707 --lr_decay_rate 3 --lr_decay_period 29 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -46,10 +46,10 @@ done
 #####################################################################
 for SEED in 12345 23456 34567 45678 56789
 do
-	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epoch 90 --batch_size 128 \
+	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epoch 70 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
+	--lr_schedule_type 'staircase' --base_lr 0.2121 --lr_decay_rate 3 --lr_decay_period 11 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -69,10 +69,10 @@ sleep 1m 1s
 #####################################################################
 for SEED in 12345 23456 34567 45678 56789
 do
-	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epoch 90 --batch_size 128 \
+	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epoch 70 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
+	--lr_schedule_type 'staircase' --base_lr 0.2121 --lr_decay_rate 3 --lr_decay_period 11 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -96,10 +96,10 @@ sleep 1m 1s
 #####################################################################
 for SEED in 12345 23456 34567 45678 56789
 do
-	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_pure_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epochs 90 --batch_size 128 \
+	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_pure_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epochs 70 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
+	--lr_schedule_type 'staircase' --base_lr 0.2121 --lr_decay_rate 3 --lr_decay_period 11 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -126,10 +126,10 @@ sleep 1m 1s
 #####################################################################
 for SEED in 12345 23456 34567 45678 56789
 do
-	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epochs 90 --batch_size 128 \
+	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epochs 70 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
+	--lr_schedule_type 'staircase' --base_lr 0.2121 --lr_decay_rate 3 --lr_decay_period 11 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -157,10 +157,10 @@ sleep 1m 1s
 ########################################################################
 for SEED in 12345 23456 34567 45678 56789
 do
-	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_C_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epochs 90 --batch_size 128 \
+	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=1 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_C_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 1 --n_epochs 70 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.3 --lr_decay_rate 3 --lr_decay_period 15 --auto_scale_forGPUs_and_BS 1 \
+	--lr_schedule_type 'staircase' --base_lr 0.2121 --lr_decay_rate 3 --lr_decay_period 11 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
