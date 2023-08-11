@@ -49,7 +49,7 @@ do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 4 --n_epoch 120 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 22 --auto_scale_forGPUs_and_BS 0 \
+	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 28 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -72,7 +72,7 @@ do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 4 --n_epoch 120 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 22 --auto_scale_forGPUs_and_BS 0 \
+	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 28 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -99,7 +99,7 @@ do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_pure_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 4 --n_epochs 120 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 22 --auto_scale_forGPUs_and_BS 0 \
+	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 28 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -129,7 +129,7 @@ do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 4 --n_epochs 120 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 22 --auto_scale_forGPUs_and_BS 0 \
+	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 28 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
@@ -160,7 +160,7 @@ do
 	OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=4 /home/chri5570/Distributed_Brand_and_Randomized_KFACs/main_files/n_GPUs_dist_B_R_C_KFAC_torchrun_lean_KFACTORS_MCI.py --world_size 4 --n_epochs 120 --batch_size 128 \
 	--stop_at_test_acc 1 --stopping_test_acc 91.00 \
 	--kfac_clip 0.07 --stat_decay 0.95 --momentum 0.0 --WD 0.0007 \
-	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 22 --auto_scale_forGPUs_and_BS 0 \
+	--lr_schedule_type 'staircase' --base_lr 0.424 --lr_decay_rate 3 --lr_decay_period 28 --auto_scale_forGPUs_and_BS 0 \
 	--test_at_end 1 --test_every_X_epochs 1 \
 	--seed $SEED --print_tqdm_progress_bar 1 \
 	--store_and_save_metrics 1 --metrics_save_path '/data/math-opt-ml/saved_metrics/' \
