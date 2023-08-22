@@ -9,18 +9,31 @@ import Distributed_Brand_and_Randomized_KFACs.main_utils.resnet_for_CIFAR10 as r
 from Distributed_Brand_and_Randomized_KFACs.main_utils.simple_net_libfile import Net as simple_MNIST_net
 
 # instantiate the model(it's your own model) and move it to the right device
-def get_net_main_util_fct(net_type, rank, num_classes = 10):
+def get_net_main_util_fct(net_type, rank, num_classes = 10, Network_scalefactor = 1):
     if '_corrected' in net_type:
         print('Using corrected resnet is only for CIFAR10, and your num_classes was {} != 10. Please use (standard) resne with this dataset'.format(num_classes))
         # strictly speaking, could make resnet_corrected work witha ny num_classes by setting model.linear to an C with the desired number of classes. We don't do that as we can just use standard resnets
     if net_type == 'Simple_net_for_MNIST':
         model = simple_MNIST_net().to(rank)
+    elif net_type == 'VGG16_bn':
+         model = get_network('vgg16_bn', dropout = True, #depth = 19,
+                     num_classes = num_classes,
+                     #growthRate = 12,
+                     #compressionRate = 2,
+                     widen_factor = 1).to(rank)
     elif net_type == 'VGG16_bn_lmxp':
         model = get_network('vgg16_bn_less_maxpool', dropout = True, #depth = 19,
                      num_classes = num_classes,
                      #growthRate = 12,
                      #compressionRate = 2,
                      widen_factor = 1).to(rank)
+    elif net_type in ['vgg11_bn_scalable', 'vgg13_bn_scalable', 'vgg16_bn_scalable']:
+        model = get_network(net_type, dropout = True, #depth = 19,
+                            Network_scalefactor = Network_scalefactor,
+                            num_classes = num_classes,
+                            #growthRate = 12,
+                            #compressionRate = 2,
+                            widen_factor = 1).to(rank)
     elif net_type == 'FC_CIFAR10':
         model = get_network('FC_net_for_CIFAR10', dropout = True, #depth = 19,
                      num_classes = num_classes).to(rank)
