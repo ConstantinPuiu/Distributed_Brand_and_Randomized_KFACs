@@ -35,5 +35,5 @@ OMP_NUM_THREADS=8 torchrun --standalone --nnodes 1 --nproc_per_node=2 /home/chri
 --TInv_period 100 --TCov_period 20 \
 --work_alloc_propto_EVD_cost 1 \
 --TInv_schedule_flag 0 --TCov_schedule_flag 0 --KFAC_damping_schedule_flag 0 \
---Kfactor_spectrum_savepath './data/math-opt-ml/saved_eigenspectrums/' --Network_scalefactor 8
+--Kfactor_spectrum_savepath '/data/math-opt-ml/saved_eigenspectrums/' --Network_scalefactor 2
 
