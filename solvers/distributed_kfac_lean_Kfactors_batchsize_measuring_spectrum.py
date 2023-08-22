@@ -175,7 +175,7 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
                 if self.K_fac_incoming_info_debugger_mode or self.dist_debugger_testing_leanness_thing:
                     print('RANK {} WORLDSIZE {}. At module {} \n ... the G size is {}\n'.format(self.rank, self.world_size, module, grad_output[0].data.shape))
                 gg = self.CovGHandler(grad_output[0].data, module, self.batch_averaged)
-                self.raw_gg[module] = {}
+                self.raw_gg[module] = gg
                 # Initialize buffers
                 if self.steps == 0:
                     self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
