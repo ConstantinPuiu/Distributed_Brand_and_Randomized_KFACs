@@ -26,7 +26,7 @@ class VGG(nn.Module):
     def __init__(self, features, Network_scalefactor = 1, num_classes=1000, **kwargs):
         super(VGG, self).__init__()
         self.features = features
-        self.classifier = nn.Linear(512 * Network_scalefactor, num_classes)
+        self.classifier = nn.Linear(int(512 * Network_scalefactor), num_classes)
         self._initialize_weights()
 
     def forward(self, x):
@@ -65,7 +65,7 @@ def make_layers(cfg, batch_norm=False, Network_scalefactor = 1):
             #layers += [nn.MaxPool2d(kernel_size= (2,2), stride = (1,1))]
             pass
         else:
-            v = v * Network_scalefactor
+            v = int(v * Network_scalefactor)
             conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
             if batch_norm:
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace = False)]

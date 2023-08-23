@@ -306,7 +306,7 @@ def arg_parser_add_arguments(parser, solver_name):
         parser.add_argument('--work_alloc_propto_EVD_cost', type=bool, default = True, help = 'Set to True if allocation in proportion to EVD cost is desired. Else naive allocation of equal number of modules for each GPU is done!' )
         # for saving eigenspectrums
         parser.add_argument('--Kfactor_spectrum_savepath', type = str, default = './', help = 'path for saving eigenspectrums')
-        parser.add_argument('--Network_scalefactor', type = int, default = 1, help = 'network FATTENING (scaling) parameter - all layers are made so many times as big to help with eigenspectrum behavior investigation')
+        parser.add_argument('--Network_scalefactor', type = float, default = 1.0, help = 'network FATTENING (scaling) parameter - all layers are made so many times as big to help with eigenspectrum behavior investigation')
     
     elif solver_name == 'KFAC':
         parser = parse_basic_arguments(parser)
