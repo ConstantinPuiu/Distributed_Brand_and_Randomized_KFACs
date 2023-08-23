@@ -128,11 +128,11 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
                 ############ END DEBUG ONLY #########
                 # Initialize buffers
                 if self.steps == 0:
-                    self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(1))
+                    self.m_aa[module] = 0 * torch.diag(aa.new(aa.size(0)).fill_(1))
                     self.size_0_of_all_Kfactors_A[module] = aa.size(0)
                 elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_A[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
                     #the first time we enter here after the efficient allocation is at step number self.TCov 
-                    self.m_aa[module] = torch.diag(aa.new(aa.size(0)).fill_(1))
+                    self.m_aa[module] = 0* torch.diag(aa.new(aa.size(0)).fill_(1))
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                     # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
@@ -178,11 +178,11 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
                 self.raw_gg[module] = gg
                 # Initialize buffers
                 if self.steps == 0:
-                    self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
+                    self.m_gg[module] = 0 * torch.diag(gg.new(gg.size(0)).fill_(1))
                     self.size_0_of_all_Kfactors_G[module] = gg.size(0)
                 elif self.steps == self.TCov and (module not in self.old_modules_for_this_rank_G[self.rank]): # we could also say "not in self.m_aa[module], but this has less control over the situation
                     #the first time we enter here after the efficient allocation is at step number self.TCov 
-                    self.m_gg[module] = torch.diag(gg.new(gg.size(0)).fill_(1))
+                    self.m_gg[module] = 0 * torch.diag(gg.new(gg.size(0)).fill_(1))
                     # we are reinitializing the modules which got newly allocated to *this GPU but were not allocated to it before
                     # we could instead choose to communicate the self.m_aa from the GPU that took care of it before, but we avoid doing so to minimize communication.
                     # here we initialize with identity and we'll move this to the reg term for R-KFAC and B-KFAC
@@ -275,6 +275,9 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
             #### end save eigenspectrum for EA kfactor A ############
             
             self.d_a[m].mul_((self.d_a[m] > eps).float())
+            
+            ## add identity regularization
+            self.d_a[m] = self.d_a[m] + self.stat_decay ** (self.steps / self.TInv)
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_a[m] = self.Q_a[m].contiguous()
             
@@ -291,7 +294,6 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
                 print('RANK {} WORLDSIZE {}. computed "G"-EVD of module {} \n'.format(self.rank, self.world_size, m))
             eps = 1e-10  # for numerical stability
             self.d_g[m], self.Q_g[m] = torch.linalg.eigh(self.m_gg[m], UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
-            self.d_g[m].mul_((self.d_g[m] > eps).float())
             
             ##### save eigenspectrum of EA Kfactor Gamma ################
             filename = self.Kfactor_spectrum_savepath \
@@ -299,6 +301,11 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
                         self.Network_scalefactor, self.layer_number[m], self.layer_type[m], self.steps)
             torch.save(self.d_g[m], filename)
             #### end save eigenspectrum for EA kfactor Gamma ############
+            
+            self.d_g[m].mul_((self.d_g[m] > eps).float())
+            
+            ## add identity regularization
+            self.d_g[m] = self.d_g[m] + self.stat_decay ** (self.steps / self.TInv)
             
             #### MAKE TENSORS CONTIGUOUS s.t. the ALLREDUCE OPERATION CAN WORK (does nto take that much!)
             self.Q_g[m] = self.Q_g[m].contiguous() # D's are already contiguous as tey were not transposed!
