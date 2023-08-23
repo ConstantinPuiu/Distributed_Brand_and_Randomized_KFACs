@@ -56,10 +56,10 @@ def get_network(network, dropout = False, **kwargs):
         
         elif network in ['vgg11_bn_scalable', 'vgg13_bn_scalable', 'vgg16_bn_scalable']:
             Net.classifier = nn.Sequential(
-                                                  nn.Linear(512 * 1 * kwargs.get('Network_scalefactor', 1), 512 * 1),
+                                                  nn.Linear(512 * 1 * kwargs.get('Network_scalefactor', 1), 256 * kwargs.get('Network_scalefactor', 1)),
                                                   nn.ReLU(inplace = False),
                                                   nn.Dropout(), # p =0.5  by default
-                                                  nn.Linear(512 * 1, kwargs.get('num_classes', 10) ),
+                                                  nn.Linear(512 * kwargs.get('Network_scalefactor', 1), kwargs.get('num_classes', 10) ),
                                               )
         else:
             raise NotImplementedError('Dropout only implemented for [vgg16_bn_less_maxpool] and [FC_net_for_CIFAR10] for now!')
