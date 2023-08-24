@@ -235,7 +235,12 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
     def _do_evd_of_raw_kfactor_and_save(self, m):
         # ================ RAW AA^T KFACTORS ===================================
         if m in self.modules_for_this_rank_A[self.rank]:
-            raw_da, _ = torch.linalg.eigh(self.raw_aa[m], UPLO = 'U') #deprecated # torch.symeig( self.m_aa[m], eigenvectors=True)
+            #II = torch.diag(self.raw_aa[m].new(self.raw_aa[m].size(0)).fill_(1 * 1e-05))
+            raw_da, _ = torch.linalg.eigh(self.raw_aa[m] + \
+                                          torch.diag(self.raw_aa[m].new(self.raw_aa[m].size(0)).fill_(1 * 1e-06)), 
+                                          UPLO = 'U') #deprecated # torch.symeig( self.m_aa[m], eigenvectors=True)
+            raw_da = raw_da - 1e-06
+            raw_da.mul_((raw_da > 0).float())
             
             ##### save eigenspectrum of EA Kfactor mathcal A ########
             filename = self.Kfactor_spectrum_savepath \
@@ -245,7 +250,12 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
             
         # ================  RAW GG^T KFACTORS ===================================
         if m in self.modules_for_this_rank_G[self.rank]:  
-            raw_dg, _ = torch.linalg.eigh(self.raw_gg[m], UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
+            #II = torch.diag(self.raw_gg[m].new(self.raw_gg[m].size(0)).fill_(1 * 1e-05))
+            raw_dg, _ = torch.linalg.eigh(self.raw_gg[m] + \
+                                          torch.diag(self.raw_gg[m].new(self.raw_gg[m].size(0)).fill_(1 * 1e-06)),
+                                          UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
+            raw_dg = raw_dg - 1e-06
+            raw_dg.mul_((raw_dg > 0).float())
             
             ##### save eigenspectrum of EA Kfactor Gamma ########
             filename = self.Kfactor_spectrum_savepath \
@@ -265,7 +275,11 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
                 print('RANK {} WORLDSIZE {}. computed "A"-EVD of module {} \n'.format(self.rank, self.world_size, m))
             
             eps = 1e-10  # for numerical stability
-            self.d_a[m], self.Q_a[m] = torch.linalg.eigh(self.m_aa[m], UPLO = 'U') #deprecated # torch.symeig( self.m_aa[m], eigenvectors=True)
+            self.d_a[m], self.Q_a[m] = torch.linalg.eigh(self.m_aa[m] + \
+                                                         torch.diag(self.m_aa[m].new(self.m_aa[m].size(0)).fill_(1 * 1e-06)),
+                                                         UPLO = 'U') #deprecated # torch.symeig( self.m_aa[m], eigenvectors=True)
+            self.d_a[m] = self.d_a[m] - 1e-06
+            self.d_a[m].mul_((self.d_a[m] > 0).float())
             
             ##### save eigenspectrum of EA Kfactor mathcal A ########
             filename = self.Kfactor_spectrum_savepath \
@@ -293,7 +307,12 @@ class KFACOptimizer_measuring_spectrum(optim.Optimizer):
             if self.dist_comm_for_layers_debugger:
                 print('RANK {} WORLDSIZE {}. computed "G"-EVD of module {} \n'.format(self.rank, self.world_size, m))
             eps = 1e-10  # for numerical stability
-            self.d_g[m], self.Q_g[m] = torch.linalg.eigh(self.m_gg[m], UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
+            
+            self.d_g[m], self.Q_g[m] = torch.linalg.eigh(self.m_gg[m] + \
+                                                         torch.diag(self.m_gg[m].new(self.m_gg[m].size(0)).fill_(1 * 1e-06)), 
+                                                         UPLO = 'U') #deprecated #torch.symeig( self.m_gg[m], eigenvectors=True)
+            self.d_g[m] = self.d_g[m] - 1e-06
+            self.d_g[m].mul_((self.d_g[m] > 0).float())
             
             ##### save eigenspectrum of EA Kfactor Gamma ################
             filename = self.Kfactor_spectrum_savepath \
