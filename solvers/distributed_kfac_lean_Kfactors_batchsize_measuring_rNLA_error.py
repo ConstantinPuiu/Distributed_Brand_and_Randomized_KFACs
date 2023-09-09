@@ -267,7 +267,7 @@ class KFACOptimizer_measuring_rNLA_error(optim.Optimizer):
         errors = d / d[0]
         if len(torch.where(errors <= rel_tr_error)[0]) > 0:
             idx = torch.where(errors <= rel_tr_error)[0][0].item()
-            return idx, errors[idx], 0
+            return idx - 1, errors[idx], 0
         else:
             return 0, 0, 1
     
