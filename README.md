@@ -1,6 +1,6 @@
 # Distributed Implementation for "Natural Gradient Algorithms for Deep Learning"
 
-This repository contains the distributed implementation for my thesis: *"Natural Gradient Algorithms for Deep Learning"*. The algorithms presented in the thesis are implemented using PyTorch and can be used as standard optimizers within the PyTorch framework.
+This repository contains the distributed implementation for my thesis: *"Natural gradient algorithms for training deep neural networks"*. The algorithms presented in the thesis are implemented using PyTorch and can be used as standard optimizers within the PyTorch framework.
 
 [Link to Thesis](https://ora.ox.ac.uk/objects/uuid:0b7ef53b-2192-4332-8641-3b53a7870a98)
 
